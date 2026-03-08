@@ -190,7 +190,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                   <h4>{b.short_description}</h4>
                   <div className="budget-meta-list">
                     <p className="client-tag">👤 {b.client_name}</p>
-                    <p className="meta-tag">📅 {new Date(b.date_created).toLocaleDateString()}</p>
+                    {b.created_at && <p className="meta-tag">📅 {new Date(b.created_at).toLocaleDateString()}</p>}
                     <p className="meta-tag">✍️ {b.creator_name}</p>
                   </div>
                 </div>
@@ -371,7 +371,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
               <div className="form-group registration-info">
                 <label>Información del Registro</label>
                 <div className="read-only-value meta-info-grid">
-                  <span>📅 Creado: {new Date(editingBudget.date_created).toLocaleDateString()}</span>
+                  <span>📅 Creado: {editingBudget.created_at ? new Date(editingBudget.created_at).toLocaleDateString() : 'N/A'}</span>
                   <span>✍️ Por: {editingBudget.creator_name}</span>
                 </div>
               </div>

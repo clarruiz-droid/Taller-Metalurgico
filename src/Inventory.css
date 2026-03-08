@@ -9,8 +9,11 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+  position: sticky;
+  top: var(--header-height);
   background-color: var(--bg-color);
   padding: 1rem 0;
+  z-index: 10;
   border-bottom: 1px solid #eee;
   margin-bottom: 0.5rem;
 }

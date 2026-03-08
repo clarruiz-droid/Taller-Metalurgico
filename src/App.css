@@ -58,6 +58,10 @@ body {
   box-shadow: var(--shadow);
   padding: 0 1rem;
   width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
 }
 
 .app-header h1 {
@@ -68,6 +72,7 @@ body {
 .app-main {
   flex: 1;
   padding: 1rem;
+  padding-top: calc(var(--header-height) + 1rem);
   width: 100%;
   max-width: 600px; /* Limite para pantallas grandes */
   margin: 0 auto;

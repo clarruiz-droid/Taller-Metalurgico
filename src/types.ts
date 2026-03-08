@@ -64,7 +64,7 @@ export interface Budget {
   order_number: number;
   client_id: string;
   client_name?: string;
-  date_created: string;
+  created_at: string;
   validity_days: number;
   short_description: string;
   long_description: string;
