@@ -16,7 +16,6 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [showClientForm, setShowClientForm] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
@@ -34,7 +33,6 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   };
 
   const [formData, setFormData] = useState(initialFormData);
-  const [newClient, setNewClient] = useState({ name: '', phone: '' });
 
   useEffect(() => {
     fetchData();
