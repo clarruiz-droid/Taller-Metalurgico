@@ -31,7 +31,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     short_description: '',
     long_description: '',
     estimated_value: 0,
-    status: 'EN_PREPARACION' as Budget['status'],
+    status: 'PENDIENTE' as Budget['status'],
     images: [] as string[],
     materials: [] as { id: string; description: string; quantity: number }[],
     tools: [] as string[]
@@ -61,9 +61,9 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canEditRole) return;
-    setLoading(true);
+    if (!canEditRole || !isEditing) return;
     
+    setLoading(true);
     try {
       if (editingBudget) {
         const { error } = await supabase
@@ -71,13 +71,13 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
           .update(formData)
           .eq('id', editingBudget.id);
         if (error) throw error;
-        alert('Presupuesto actualizado');
+        alert('Presupuesto actualizado con éxito');
       } else {
         const { error } = await supabase
           .from('presupuestos')
           .insert([formData]);
         if (error) throw error;
-        alert('Presupuesto creado');
+        alert('Presupuesto creado con éxito');
       }
       closeForm();
       fetchData();
@@ -113,14 +113,20 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
       materials: b.materials || [],
       tools: b.tools || []
     });
-    setIsEditing(false); // Abrir en modo lectura por defecto
+    setIsEditing(false);
     setShowForm(true);
   };
 
   const closeForm = () => {
-    setShowForm(false);
+    if (showForm && !editingBudget) {
+      setShowForm(false);
+    } else if (showForm && editingBudget) {
+      setShowForm(false);
+      setEditingBudget(null);
+    } else {
+      onBack();
+    }
     setIsEditing(false);
-    setEditingBudget(null);
     setFormData(initialFormData);
     setMaterialSearch('');
     setToolSearch('');
@@ -140,10 +146,10 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   const currentClient = clients.find(c => c.id === formData.client_id);
 
   return (
-    <div className="inventory-view">
+    <div className="inventory-view budget-view-main">
       <header className="view-header">
-        <button className="btn-back" onClick={onBack}>← Volver</button>
-        <h3>Presupuestos</h3>
+        <button className="btn-back" onClick={showForm ? closeForm : onBack}>← Volver</button>
+        <h3>{showForm ? (editingBudget ? `Presupuesto #${formatOrder(editingBudget.order_number)}` : 'Nuevo Presupuesto') : 'Gestión de Presupuestos'}</h3>
       </header>
 
       {!showForm ? (
@@ -167,23 +173,30 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
               </div>
             ))}
           </div>
-          {canEditRole && <button className="btn-fab" onClick={() => { setShowForm(true); setIsEditing(true); }}>+</button>}
+          {canEditRole && <button className="btn-fab" onClick={() => { 
+            setEditingBudget(null);
+            setFormData(initialFormData);
+            setIsEditing(true); 
+            setShowForm(true); 
+          }}>+</button>}
         </>
       ) : (
         <div className="material-form-container budget-detail-view">
-          <h4>{editingBudget ? `Presupuesto #${formatOrder(editingBudget.order_number)}` : 'Nuevo Presupuesto'}</h4>
-          
+          <div className="form-header-title">
+            <h4>{editingBudget ? `Presupuesto #${formatOrder(editingBudget.order_number)}` : 'Nuevo Presupuesto'}</h4>
+          </div>
           <form className="material-form" onSubmit={handleSave}>
             
             {/* ESTADO */}
             <div className="form-group">
-              <label>Estado</label>
+              <label>Estado Actual</label>
               {isEditing ? (
                 <select 
                   value={formData.status} 
                   onChange={e => setFormData({...formData, status: e.target.value as Budget['status']})}
                   className="form-input status-select"
                 >
+                  <option value="PENDIENTE">PENDIENTE</option>
                   <option value="EN_PREPARACION">EN PREPARACIÓN</option>
                   <option value="ENVIADO">ENVIADO</option>
                   <option value="APROBADO">APROBADO</option>
@@ -329,16 +342,23 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                 {isEditing && editingBudget ? 'Cancelar Edición' : 'Volver'}
               </button>
               
-              {!isEditing && canEditRole ? (
-                <button type="button" className="btn-primary" onClick={() => setIsEditing(true)}>
+              {!isEditing && canEditRole && (
+                <button 
+                  type="button" 
+                  className="btn-primary" 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    setIsEditing(true); 
+                  }}
+                >
                   ✎ Editar Presupuesto
                 </button>
-              ) : (
-                canEditRole && (
-                  <button type="submit" className="btn-primary" disabled={loading}>
-                    {editingBudget ? 'Guardar Cambios' : 'Crear Presupuesto'}
-                  </button>
-                )
+              )}
+
+              {isEditing && canEditRole && (
+                <button type="submit" className="btn-primary" disabled={loading}>
+                  {editingBudget ? 'Guardar Cambios' : 'Crear Presupuesto'}
+                </button>
               )}
             </div>
           </form>

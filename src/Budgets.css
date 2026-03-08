@@ -1,3 +1,7 @@
+.budget-view-main {
+  margin-top: 1rem;
+}
+
 .budget-list {
   display: flex;
   flex-direction: column;
@@ -39,7 +43,33 @@
   font-size: 1rem;
 }
 
+.status-pendiente {
+  background-color: #f1c40f;
+  color: #000;
+}
+
 /* Form Styles */
+.form-header-title {
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid var(--secondary-color);
+  padding-bottom: 0.5rem;
+}
+
+.form-header-title h4 {
+  margin-bottom: 0;
+  color: var(--primary-color);
+  font-size: 1.2rem;
+  border-bottom: none;
+}
+
+.material-form-container h4 {
+  margin-bottom: 1.5rem;
+  color: var(--primary-color);
+  font-size: 1.2rem;
+  border-bottom: 2px solid var(--secondary-color);
+  padding-bottom: 0.5rem;
+}
+
 .input-with-action {
   display: flex;
   gap: 0.5rem;
