@@ -134,4 +134,16 @@
   margin-top: 2rem;
   font-size: 0.75rem;
   color: #888;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.version-tag {
+  background: #f0f0f0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: bold;
+  color: #aaa;
 }

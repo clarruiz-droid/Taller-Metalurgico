@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { supabase } from './lib/supabase';
 import './Login.css';
 
+import pkg from '../package.json';
+
 interface LoginProps {
   onLoginSuccess: () => void;
 }
@@ -77,7 +79,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         </button>
       </form>
       
-      <p className="login-footer">Solo personal autorizado. Si no tiene acceso, contacte al Administrador.</p>
+      <div className="login-footer">
+        <p>Solo personal autorizado.</p>
+        <span className="version-tag">Versión {pkg.version}</span>
+      </div>
     </div>
   );
 };
