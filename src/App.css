@@ -1,0 +1,192 @@
+:root {
+  --primary-color: #2c3e50;
+  --secondary-color: #f39c12;
+  --accent-color: #e67e22;
+  --bg-color: #f4f7f6;
+  --text-color: #333;
+  --card-bg: #ffffff;
+  --border-radius: 8px;
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --header-height: 60px;
+  --footer-height: 50px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  height: var(--header-height);
+  background-color: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow);
+  padding: 0 1rem;
+}
+
+.logout-link {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.dashboard-header {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.dashboard-header h2 {
+  color: var(--primary-color);
+  font-size: 1.2rem;
+}
+
+.role-indicator {
+  background: #e1e8ed;
+  padding: 0.5rem;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #555;
+  margin-bottom: 1.5rem;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.menu-item {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: var(--border-radius);
+  padding: 1.5rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.menu-item:active {
+  transform: scale(0.95);
+  background-color: #f0f0f0;
+}
+
+.menu-item .icon {
+  font-size: 2rem;
+}
+
+.menu-item span:last-child {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .menu-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .menu-item {
+    flex-direction: row;
+    padding: 1rem;
+    justify-content: flex-start;
+  }
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  letter-spacing: 1px;
+}
+
+.app-main {
+  flex: 1;
+  padding: 2rem 1rem;
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.welcome-section {
+  text-align: center;
+  background-color: var(--card-bg);
+  padding: 2rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+}
+
+.welcome-section h2 {
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+}
+
+.welcome-section p {
+  margin-bottom: 2rem;
+  color: #666;
+}
+
+.btn-primary {
+  background-color: var(--secondary-color);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  width: 100%;
+  max-width: 250px;
+}
+
+.btn-primary:active {
+  background-color: var(--accent-color);
+}
+
+.app-footer {
+  height: var(--footer-height);
+  background-color: #eee;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  color: #777;
+}
+
+@media (max-width: 480px) {
+  .app-header h1 {
+    font-size: 1.2rem;
+  }
+}
