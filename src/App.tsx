@@ -90,8 +90,11 @@ function App() {
         return (
           <div className="dashboard">
             <header className="dashboard-header">
-              <h2>Panel de {ROLE_LABELS[currentUser.role]}</h2>
-              <p>Bienvenido, <strong>{currentUser.name}</strong></p>
+              <div className="user-welcome">
+                <h2>Panel de {ROLE_LABELS[currentUser.role]}</h2>
+                <p>Bienvenido, <strong>{currentUser.name}</strong></p>
+              </div>
+              <button className="logout-btn" onClick={handleLogout}>Salir</button>
             </header>
 
             <section className="dashboard-content">
@@ -145,9 +148,6 @@ function App() {
     <div className="app-container">
       <header className="app-header">
         <h1>🛠️ Taller Metalúrgico</h1>
-        {currentUser && (
-          <button className="logout-link" onClick={handleLogout}>Salir</button>
-        )}
       </header>
       
       <main className="app-main">
