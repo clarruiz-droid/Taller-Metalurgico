@@ -215,8 +215,17 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
           <div className="form-header-title">
             <h4>{editingBudget ? `Presupuesto #${formatOrder(editingBudget.order_number)}` : 'Nuevo Presupuesto'}</h4>
           </div>
+          
           <form className="material-form" onSubmit={handleSave}>
             
+            {/* INFO REGISTRO (Siempre visible) */}
+            <div className="form-group registration-info-box">
+              <div className="meta-info-grid">
+                <span>📅 Fecha: {editingBudget?.created_at ? new Date(editingBudget.created_at).toLocaleDateString() : new Date().toLocaleDateString() + ' (Hoy)'}</span>
+                <span>✍️ Creador: {editingBudget?.creator_name || currentUser?.name || 'Usuario Actual'}</span>
+              </div>
+            </div>
+
             {/* CLIENTE */}
             <div className="form-group">
               <label>Cliente</label>
