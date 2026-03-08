@@ -80,7 +80,7 @@ function App() {
       case 'CLIENTS':
         return <ClientManagement onBack={() => setActiveView('DASHBOARD')} />;
       case 'BUDGETS':
-        return <BudgetView onBack={() => setActiveView('DASHBOARD')} />;
+        return <BudgetView onBack={() => setActiveView('DASHBOARD')} currentUser={currentUser} />;
       case 'WORK_ORDERS':
         return <WorkOrdersView onBack={() => setActiveView('DASHBOARD')} />;
       case 'USER_MANAGEMENT':

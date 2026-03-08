@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import type { Budget, Client, Material, Tool } from './types';
+import type { Budget, Client, Material, Tool, User } from './types';
 import { supabase } from './lib/supabase';
 import './Budgets.css';
 
-const BudgetView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+interface BudgetViewProps {
+  onBack: () => void;
+  currentUser: User | null;
+}
+
+const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -12,6 +17,9 @@ const BudgetView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Permisos: Solo Admin y Supervisor pueden editar/crear
+  const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
 
   // Estado del formulario
   const [formData, setFormData] = useState({
@@ -53,7 +61,7 @@ const BudgetView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       img.src = URL.createObjectURL(file);
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX = 600; // Un poco más de calidad para presupuestos
+        const MAX = 600;
         let w = img.width, h = img.height;
         if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
         else { if (h > MAX) { w *= MAX / h; h = MAX; } }
@@ -84,6 +92,7 @@ const BudgetView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEdit) return;
     setLoading(true);
     const { error } = await supabase.from('presupuestos').insert([formData]);
     if (error) alert('Error: ' + error.message);
@@ -110,6 +119,7 @@ const BudgetView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       {!showForm ? (
         <>
           <div className="budget-list">
+            {budgets.length === 0 && !loading && <p className="empty-msg">No hay presupuestos registrados.</p>}
             {budgets.map(b => (
               <div key={b.id} className="material-card budget-card">
                 <div className="budget-number">#{formatOrder(b.order_number)}</div>
@@ -122,7 +132,9 @@ const BudgetView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               </div>
             ))}
           </div>
-          <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>
+          {canEdit && (
+            <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>
+          )}
         </>
       ) : (
         <div className="material-form-container">
