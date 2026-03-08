@@ -17,7 +17,6 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showClientForm, setShowClientForm] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
 
