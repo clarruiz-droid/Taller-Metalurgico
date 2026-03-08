@@ -16,12 +16,11 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showClientForm, setShowClientForm] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Permisos: Solo Admin y Supervisor pueden editar/crear
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
 
-  // Estado del formulario
   const [formData, setFormData] = useState({
     client_id: '',
     validity_days: 15,
@@ -33,6 +32,8 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     materials: [] as { id: string; description: string; quantity: number }[],
     tools: [] as string[]
   });
+
+  const [newClient, setNewClient] = useState({ name: '', phone: '' });
 
   useEffect(() => {
     fetchData();
@@ -51,43 +52,18 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     if (!cRes.error) setClients(cRes.data || []);
     if (!mRes.error) setMaterials(mRes.data || []);
     if (!tRes.error) setTools(tRes.data || []);
-    
     setLoading(false);
   };
 
-  const resizeImage = (file: File): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX = 600;
-        let w = img.width, h = img.height;
-        if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
-        else { if (h > MAX) { w *= MAX / h; h = MAX; } }
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, w, h);
-          canvas.toBlob(b => b ? resolve(b) : reject(), 'image/webp', 0.8);
-        }
-      };
-    });
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    setUploading(true);
-    try {
-      const file = e.target.files[0];
-      const blob = await resizeImage(file);
-      const path = `${Math.random()}.webp`;
-      const { error } = await supabase.storage.from('presupuestos').upload(path, blob);
-      if (error) throw error;
-      const { data } = supabase.storage.from('presupuestos').getPublicUrl(path);
-      setFormData({ ...formData, images: [...formData.images, data.publicUrl] });
-    } catch (err) { alert('Error al subir imagen'); }
-    finally { setUploading(false); }
+  const handleQuickClient = async () => {
+    if (!newClient.name) return;
+    const { data, error } = await supabase.from('clientes').insert([newClient]).select();
+    if (!error && data) {
+      setClients([...clients, data[0]]);
+      setFormData({ ...formData, client_id: data[0].id });
+      setShowClientForm(false);
+      setNewClient({ name: '', phone: '' });
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -100,14 +76,14 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     setLoading(false);
   };
 
-  const addMaterial = (mId: string) => {
-    const mat = materials.find(m => m.id === mId);
-    if (mat && !formData.materials.find(x => x.id === mId)) {
-      setFormData({ ...formData, materials: [...formData.materials, { id: mId, description: mat.description, quantity: 1 }] });
-    }
+  const toggleTool = (id: string) => {
+    const newTools = formData.tools.includes(id) 
+      ? formData.tools.filter(t => t !== id) 
+      : [...formData.tools, id];
+    setFormData({ ...formData, tools: newTools });
   };
 
-  const formatOrder = (num: number) => num.toString().padStart(6, '0');
+  const formatOrder = (num: number) => num?.toString().padStart(6, '0') || '000000';
 
   return (
     <div className="inventory-view">
@@ -119,84 +95,110 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
       {!showForm ? (
         <>
           <div className="budget-list">
-            {budgets.length === 0 && !loading && <p className="empty-msg">No hay presupuestos registrados.</p>}
             {budgets.map(b => (
               <div key={b.id} className="material-card budget-card">
-                <div className="budget-number">#{formatOrder(b.order_number)}</div>
-                <div className="material-info">
+                <div className="budget-info-main">
+                  <span className="budget-number">#{formatOrder(b.order_number)}</span>
                   <h4>{b.short_description}</h4>
-                  <p className="user-id">Cliente: {b.client_name}</p>
-                  <span className={`role-badge status-${b.status.toLowerCase()}`}>{b.status}</span>
+                  <p className="client-tag">👤 {b.client_name}</p>
                 </div>
-                <div className="budget-price">${Number(b.estimated_value).toLocaleString()}</div>
+                <div className="budget-status-val">
+                  <span className={`role-badge status-${b.status.toLowerCase()}`}>{b.status}</span>
+                  <span className="price-tag">${Number(b.estimated_value).toLocaleString()}</span>
+                </div>
               </div>
             ))}
           </div>
-          {canEdit && (
-            <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>
-          )}
+          {canEdit && <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>}
         </>
       ) : (
         <div className="material-form-container">
           <h4>Nuevo Presupuesto</h4>
           <form className="material-form" onSubmit={handleSave}>
+            
             <div className="form-group">
               <label>Cliente</label>
-              <select 
-                value={formData.client_id} 
-                onChange={e => setFormData({...formData, client_id: e.target.value})}
-                required className="form-input"
-              >
-                <option value="">Seleccione un cliente...</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label>Descripción Corta</label>
-              <input type="text" value={formData.short_description} onChange={e => setFormData({...formData, short_description: e.target.value})} placeholder="Ej: Reja para ventana" required className="form-input" />
-            </div>
-
-            <div className="form-group">
-              <label>Descripción Detallada</label>
-              <textarea value={formData.long_description} onChange={e => setFormData({...formData, long_description: e.target.value})} className="form-input" rows={3}></textarea>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Validez (Días)</label>
-                <input type="number" value={formData.validity_days} onChange={e => setFormData({...formData, validity_days: parseInt(e.target.value)})} className="form-input" />
+              <div className="input-with-action">
+                <select 
+                  value={formData.client_id} 
+                  onChange={e => setFormData({...formData, client_id: e.target.value})}
+                  required className="form-input"
+                >
+                  <option value="">Seleccione cliente...</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <button type="button" className="btn-small" onClick={() => setShowClientForm(!showClientForm)}>
+                  {showClientForm ? '✕' : '+'}
+                </button>
               </div>
-              <div className="form-group">
-                <label>Valor Estimado ($)</label>
-                <input type="number" value={formData.estimated_value} onChange={e => setFormData({...formData, estimated_value: parseFloat(e.target.value)})} className="form-input" />
-              </div>
+              
+              {showClientForm && (
+                <div className="quick-form">
+                  <input type="text" placeholder="Nombre" value={newClient.name} onChange={e => setNewClient({...newClient, name: e.target.value})} className="form-input" />
+                  <input type="text" placeholder="Teléfono" value={newClient.phone} onChange={e => setNewClient({...newClient, phone: e.target.value})} className="form-input" />
+                  <button type="button" onClick={handleQuickClient} className="btn-primary-small">Crear Cliente</button>
+                </div>
+              )}
             </div>
 
             <div className="form-group">
-              <label>Materiales Necesarios</label>
-              <select onChange={e => addMaterial(e.target.value)} className="form-input">
-                <option value="">Añadir material...</option>
+              <label>Descripción Corta (Título)</label>
+              <input type="text" value={formData.short_description} onChange={e => setFormData({...formData, short_description: e.target.value})} placeholder="Ej: Reja ventana frente" required className="form-input" />
+            </div>
+
+            <div className="form-group">
+              <label>Descripción Larga (Detalle)</label>
+              <textarea value={formData.long_description} onChange={e => setFormData({...formData, long_description: e.target.value})} className="form-input" rows={4} placeholder="Detalle técnico, medidas, color..."></textarea>
+            </div>
+
+            <div className="form-group">
+              <label>Materiales (Stock)</label>
+              <select onChange={e => {
+                const mat = materials.find(m => m.id === e.target.value);
+                if (mat && !formData.materials.find(x => x.id === mat.id)) {
+                  setFormData({...formData, materials: [...formData.materials, { id: mat.id, description: mat.description, quantity: 1 }]});
+                }
+              }} className="form-input">
+                <option value="">Añadir material del inventario...</option>
                 {materials.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
               </select>
-              <div className="selected-items">
+              <div className="selected-items-list">
                 {formData.materials.map(m => (
-                  <div key={m.id} className="selected-item">
+                  <div key={m.id} className="item-chip">
                     <span>{m.description}</span>
                     <input type="number" value={m.quantity} onChange={e => {
-                      const newMats = formData.materials.map(x => x.id === m.id ? {...x, quantity: parseFloat(e.target.value)} : x);
-                      setFormData({...formData, materials: newMats});
-                    }} className="qty-input" />
+                      const updated = formData.materials.map(x => x.id === m.id ? {...x, quantity: parseFloat(e.target.value)} : x);
+                      setFormData({...formData, materials: updated});
+                    }} className="chip-qty" />
+                    <button type="button" onClick={() => setFormData({...formData, materials: formData.materials.filter(x => x.id !== m.id)})} className="btn-remove">✕</button>
                   </div>
                 ))}
               </div>
             </div>
 
             <div className="form-group">
-              <label>Imágenes de Referencia</label>
-              <input type="file" capture="environment" accept="image/*" onChange={handleImageUpload} disabled={uploading} className="file-input" />
-              <div className="image-previews-grid">
-                {formData.images.map((img, i) => <img key={i} src={img} className="mini-preview" />)}
+              <label>Herramientas Sugeridas</label>
+              <div className="tools-selection-grid">
+                {tools.map(t => (
+                  <div 
+                    key={t.id} 
+                    className={`tool-select-card ${formData.tools.includes(t.id) ? 'selected' : ''}`}
+                    onClick={() => toggleTool(t.id)}
+                  >
+                    {t.description}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Valor Estimado ($)</label>
+                <input type="number" value={formData.estimated_value} onChange={e => setFormData({...formData, estimated_value: parseFloat(e.target.value)})} className="form-input" placeholder="0.00" />
+              </div>
+              <div className="form-group">
+                <label>Días de Validez</label>
+                <input type="number" value={formData.validity_days} onChange={e => setFormData({...formData, validity_days: parseInt(e.target.value)})} className="form-input" />
               </div>
             </div>
 
