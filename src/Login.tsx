@@ -38,7 +38,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       <div className="login-header">
         <div className="logo-icon">🛠️</div>
         <h2>Acceso al Taller</h2>
-        <p>Ingrese sus credenciales</p>
+        <p>Ingrese sus credenciales para continuar</p>
       </div>
       
       <form onSubmit={handleLogin} className="login-form">
@@ -77,7 +77,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         </button>
       </form>
       
-      <p className="login-footer">Consulte con el Administrador si no tiene cuenta.</p>
+      <p className="login-footer">Solo personal autorizado. Si no tiene acceso, contacte al Administrador.</p>
     </div>
   );
 };

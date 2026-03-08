@@ -104,6 +104,32 @@
   text-align: center;
 }
 
+.success-banner {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  border: 1px solid #a5d6a7;
+  font-weight: 600;
+  text-align: center;
+}
+
+.switch-btn {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 1rem;
+  text-decoration: underline;
+}
+
+.switch-btn:hover {
+  color: #1a252f;
+}
+
 .login-footer {
   margin-top: 2rem;
   font-size: 0.75rem;
