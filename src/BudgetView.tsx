@@ -19,9 +19,10 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
-  // Estados de búsqueda
+  // Estados de búsqueda y filtro
   const [materialSearch, setMaterialSearch] = useState('');
   const [toolSearch, setToolSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | Budget['status']>('ALL');
 
   const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
 
@@ -145,6 +146,10 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
   const currentClient = clients.find(c => c.id === formData.client_id);
 
+  const filteredBudgets = statusFilter === 'ALL' 
+    ? budgets 
+    : budgets.filter(b => b.status === statusFilter);
+
   return (
     <div className="inventory-view budget-view-main">
       <header className="view-header">
@@ -154,17 +159,32 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
       {!showForm ? (
         <>
+          {/* Filtros de Estado */}
+          <div className="filter-tabs budget-filters">
+            <button className={statusFilter === 'ALL' ? 'active' : ''} onClick={() => setStatusFilter('ALL')}>Todos</button>
+            <button className={statusFilter === 'PENDIENTE' ? 'active' : ''} onClick={() => setStatusFilter('PENDIENTE')}>Pendiente</button>
+            <button className={statusFilter === 'EN_PREPARACION' ? 'active' : ''} onClick={() => setStatusFilter('EN_PREPARACION')}>En Preparación</button>
+            <button className={statusFilter === 'ENVIADO' ? 'active' : ''} onClick={() => setStatusFilter('ENVIADO')}>Enviado</button>
+            <button className={statusFilter === 'APROBADO' ? 'active' : ''} onClick={() => setStatusFilter('APROBADO')}>Aprobado</button>
+            <button className={statusFilter === 'RECHAZADO' ? 'active' : ''} onClick={() => setStatusFilter('RECHAZADO')}>Rechazado</button>
+            <button className={statusFilter === 'FINALIZADO' ? 'active' : ''} onClick={() => setStatusFilter('FINALIZADO')}>Finalizado</button>
+          </div>
+
           <div className="budget-list">
-            {budgets.length === 0 && !loading && <p className="empty-msg">No hay presupuestos registrados.</p>}
-            {budgets.map(b => (
+            {filteredBudgets.length === 0 && !loading && <p className="empty-msg">No hay presupuestos que coincidan con el filtro.</p>}
+            {filteredBudgets.map(b => (
               <div key={b.id} className="material-card budget-card clickable" onClick={() => openView(b)}>
                 <div className="budget-info-main">
-                  <span className="budget-number">#{formatOrder(b.order_number)}</span>
+                  <div className="budget-card-header">
+                    <span className="budget-number">#{formatOrder(b.order_number)}</span>
+                    <span className={`status-badge status-${b.status.toLowerCase().replace('_', '-')}`}>
+                      {b.status.replace('_', ' ')}
+                    </span>
+                  </div>
                   <h4>{b.short_description}</h4>
                   <p className="client-tag">👤 {b.client_name}</p>
                 </div>
                 <div className="budget-status-val">
-                  <span className={`role-badge status-${b.status.toLowerCase().replace('_', '-')}`}>{b.status.replace('_', ' ')}</span>
                   <span className="price-tag">${Number(b.estimated_value).toLocaleString()}</span>
                   {canEditRole && (
                     <button className="btn-delete-small" onClick={(e) => handleDelete(e, b.id)}>🗑</button>
