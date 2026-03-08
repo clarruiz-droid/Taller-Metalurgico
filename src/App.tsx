@@ -3,6 +3,7 @@ import './App.css'
 import Login from './Login'
 import MaterialInventory from './MaterialInventory'
 import ToolInventory from './ToolInventory'
+import ClientManagement from './ClientManagement'
 import BudgetView from './BudgetView'
 import WorkOrdersView from './WorkOrdersView'
 import UserManagement from './UserManagement'
@@ -10,7 +11,7 @@ import { supabase } from './lib/supabase'
 import type { User } from './types'
 import { ROLE_LABELS } from './types'
 
-type AppView = 'DASHBOARD' | 'MATERIAL_INVENTORY' | 'TOOLS' | 'BUDGETS' | 'WORK_ORDERS' | 'REPORTS' | 'USER_MANAGEMENT';
+type AppView = 'DASHBOARD' | 'MATERIAL_INVENTORY' | 'TOOLS' | 'CLIENTS' | 'BUDGETS' | 'WORK_ORDERS' | 'REPORTS' | 'USER_MANAGEMENT';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
@@ -76,6 +77,8 @@ function App() {
         return <MaterialInventory onBack={() => setActiveView('DASHBOARD')} />;
       case 'TOOLS':
         return <ToolInventory onBack={() => setActiveView('DASHBOARD')} />;
+      case 'CLIENTS':
+        return <ClientManagement onBack={() => setActiveView('DASHBOARD')} />;
       case 'BUDGETS':
         return <BudgetView onBack={() => setActiveView('DASHBOARD')} />;
       case 'WORK_ORDERS':
@@ -104,6 +107,10 @@ function App() {
                 <button className="menu-item" onClick={() => setActiveView('TOOLS')}>
                   <span className="icon">🔧</span>
                   <span>Herramientas</span>
+                </button>
+                <button className="menu-item" onClick={() => setActiveView('CLIENTS')}>
+                  <span className="icon">🤝</span>
+                  <span>Clientes</span>
                 </button>
                 {(currentUser.role === 'ADMIN' || currentUser.role === 'GERENTE' || currentUser.role === 'SUPERVISOR') && (
                   <button className="menu-item" onClick={() => setActiveView('BUDGETS')}>

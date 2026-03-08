@@ -23,6 +23,15 @@ export interface Material {
   image_url?: string;
 }
 
+export interface Client {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  cuit_dni?: string;
+}
+
 export type ToolStatus = 'OPERATIVA' | 'REPARACION' | 'EXTRAVIADA';
 
 export interface Tool {
