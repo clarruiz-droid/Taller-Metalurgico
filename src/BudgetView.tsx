@@ -16,13 +16,14 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
   // Estados de búsqueda
   const [materialSearch, setMaterialSearch] = useState('');
   const [toolSearch, setToolSearch] = useState('');
 
-  const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
+  const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
 
   const initialFormData = {
     client_id: '',
@@ -60,7 +61,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canEdit) return;
+    if (!canEditRole) return;
     setLoading(true);
     
     try {
@@ -89,7 +90,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!canEdit) return;
+    if (!canEditRole) return;
     if (!window.confirm('¿Eliminar este presupuesto permanentemente?')) return;
     
     setLoading(true);
@@ -99,7 +100,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     setLoading(false);
   };
 
-  const openEdit = (b: Budget) => {
+  const openView = (b: Budget) => {
     setEditingBudget(b);
     setFormData({
       client_id: b.client_id,
@@ -112,11 +113,13 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
       materials: b.materials || [],
       tools: b.tools || []
     });
+    setIsEditing(false); // Abrir en modo lectura por defecto
     setShowForm(true);
   };
 
   const closeForm = () => {
     setShowForm(false);
+    setIsEditing(false);
     setEditingBudget(null);
     setFormData(initialFormData);
     setMaterialSearch('');
@@ -125,7 +128,6 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
   const formatOrder = (num: number) => num?.toString().padStart(6, '0') || '000000';
 
-  // Filtrado de materiales y herramientas
   const filteredMaterials = materials.filter(m => 
     m.description.toLowerCase().includes(materialSearch.toLowerCase())
   );
@@ -134,6 +136,8 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     t.description.toLowerCase().includes(toolSearch.toLowerCase()) ||
     t.brand.toLowerCase().includes(toolSearch.toLowerCase())
   );
+
+  const currentClient = clients.find(c => c.id === formData.client_id);
 
   return (
     <div className="inventory-view">
@@ -147,7 +151,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
           <div className="budget-list">
             {budgets.length === 0 && !loading && <p className="empty-msg">No hay presupuestos registrados.</p>}
             {budgets.map(b => (
-              <div key={b.id} className="material-card budget-card clickable" onClick={() => openEdit(b)}>
+              <div key={b.id} className="material-card budget-card clickable" onClick={() => openView(b)}>
                 <div className="budget-info-main">
                   <span className="budget-number">#{formatOrder(b.order_number)}</span>
                   <h4>{b.short_description}</h4>
@@ -156,140 +160,186 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                 <div className="budget-status-val">
                   <span className={`role-badge status-${b.status.toLowerCase().replace('_', '-')}`}>{b.status.replace('_', ' ')}</span>
                   <span className="price-tag">${Number(b.estimated_value).toLocaleString()}</span>
-                  {canEdit && (
+                  {canEditRole && (
                     <button className="btn-delete-small" onClick={(e) => handleDelete(e, b.id)}>🗑</button>
                   )}
                 </div>
               </div>
             ))}
           </div>
-          {canEdit && <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>}
+          {canEditRole && <button className="btn-fab" onClick={() => { setShowForm(true); setIsEditing(true); }}>+</button>}
         </>
       ) : (
-        <div className="material-form-container">
-          <h4>{editingBudget ? `Editando Presupuesto #${formatOrder(editingBudget.order_number)}` : 'Nuevo Presupuesto'}</h4>
+        <div className="material-form-container budget-detail-view">
+          <h4>{editingBudget ? `Presupuesto #${formatOrder(editingBudget.order_number)}` : 'Nuevo Presupuesto'}</h4>
+          
           <form className="material-form" onSubmit={handleSave}>
             
+            {/* ESTADO */}
             <div className="form-group">
-              <label>Estado del Presupuesto</label>
-              <select 
-                value={formData.status} 
-                onChange={e => setFormData({...formData, status: e.target.value as Budget['status']})}
-                className="form-input status-select"
-              >
-                <option value="EN_PREPARACION">EN PREPARACIÓN</option>
-                <option value="ENVIADO">ENVIADO</option>
-                <option value="APROBADO">APROBADO</option>
-                <option value="RECHAZADO">RECHAZADO</option>
-                <option value="FINALIZADO">FINALIZADO</option>
-              </select>
+              <label>Estado</label>
+              {isEditing ? (
+                <select 
+                  value={formData.status} 
+                  onChange={e => setFormData({...formData, status: e.target.value as Budget['status']})}
+                  className="form-input status-select"
+                >
+                  <option value="EN_PREPARACION">EN PREPARACIÓN</option>
+                  <option value="ENVIADO">ENVIADO</option>
+                  <option value="APROBADO">APROBADO</option>
+                  <option value="RECHAZADO">RECHAZADO</option>
+                  <option value="FINALIZADO">FINALIZADO</option>
+                </select>
+              ) : (
+                <div className={`read-only-badge status-${formData.status.toLowerCase().replace('_', '-')}`}>
+                  {formData.status.replace('_', ' ')}
+                </div>
+              )}
             </div>
 
+            {/* CLIENTE */}
             <div className="form-group">
               <label>Cliente</label>
-              <select 
-                value={formData.client_id} 
-                onChange={e => setFormData({...formData, client_id: e.target.value})}
-                required className="form-input"
-              >
-                <option value="">Seleccione cliente...</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              {isEditing ? (
+                <select 
+                  value={formData.client_id} 
+                  onChange={e => setFormData({...formData, client_id: e.target.value})}
+                  required className="form-input"
+                >
+                  <option value="">Seleccione cliente...</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              ) : (
+                <div className="read-only-value">👤 {currentClient?.name || 'No seleccionado'}</div>
+              )}
             </div>
 
+            {/* DESCRIPCIÓN CORTA */}
             <div className="form-group">
-              <label>Descripción Corta (Título)</label>
-              <input type="text" value={formData.short_description} onChange={e => setFormData({...formData, short_description: e.target.value})} placeholder="Ej: Reja ventana frente" required className="form-input" />
+              <label>Descripción Corta</label>
+              {isEditing ? (
+                <input type="text" value={formData.short_description} onChange={e => setFormData({...formData, short_description: e.target.value})} placeholder="Ej: Reja ventana frente" required className="form-input" />
+              ) : (
+                <div className="read-only-value highlight">{formData.short_description}</div>
+              )}
             </div>
 
+            {/* DESCRIPCIÓN LARGA */}
             <div className="form-group">
-              <label>Descripción Larga (Detalle Técnico)</label>
-              <textarea value={formData.long_description} onChange={e => setFormData({...formData, long_description: e.target.value})} className="form-input" rows={4} placeholder="Detalle técnico, medidas, color..."></textarea>
+              <label>Detalle Técnico</label>
+              {isEditing ? (
+                <textarea value={formData.long_description} onChange={e => setFormData({...formData, long_description: e.target.value})} className="form-input" rows={4} placeholder="Detalle técnico, medidas, color..."></textarea>
+              ) : (
+                <div className="read-only-value long-text">{formData.long_description || 'Sin detalle técnico.'}</div>
+              )}
             </div>
 
-            {/* SECCIÓN MATERIALES (Unificado) */}
+            {/* MATERIALES */}
             <div className="form-group">
-              <label>Materiales Necesarios</label>
-              <input 
-                type="text" 
-                placeholder="🔍 Buscar material..." 
-                value={materialSearch}
-                onChange={e => setMaterialSearch(e.target.value)}
-                className="form-input search-input-inline"
-              />
-              <select onChange={e => {
-                const mat = materials.find(m => m.id === e.target.value);
-                if (mat && !formData.materials.find(x => x.id === mat.id)) {
-                  setFormData({...formData, materials: [...formData.materials, { id: mat.id, description: mat.description, quantity: 1 }]});
-                  setMaterialSearch('');
-                }
-              }} className="form-input" value="">
-                <option value="">{filteredMaterials.length === 0 ? 'Sin resultados' : 'Seleccionar material...'}</option>
-                {filteredMaterials.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
-              </select>
+              <label>Materiales</label>
+              {isEditing && (
+                <>
+                  <input type="text" placeholder="🔍 Buscar material..." value={materialSearch} onChange={e => setMaterialSearch(e.target.value)} className="form-input search-input-inline" />
+                  <select onChange={e => {
+                    const mat = materials.find(m => m.id === e.target.value);
+                    if (mat && !formData.materials.find(x => x.id === mat.id)) {
+                      setFormData({...formData, materials: [...formData.materials, { id: mat.id, description: mat.description, quantity: 1 }]});
+                      setMaterialSearch('');
+                    }
+                  }} className="form-input" value="">
+                    <option value="">Seleccionar material...</option>
+                    {filteredMaterials.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
+                  </select>
+                </>
+              )}
               <div className="selected-items-list">
+                {formData.materials.length === 0 && !isEditing && <p className="read-only-placeholder">No se asignaron materiales.</p>}
                 {formData.materials.map(m => (
-                  <div key={m.id} className="item-chip">
+                  <div key={m.id} className={`item-chip ${!isEditing ? 'view-mode' : ''}`}>
                     <span>{m.description}</span>
-                    <input type="number" step="0.01" value={m.quantity} onChange={e => {
-                      const updated = formData.materials.map(x => x.id === m.id ? {...x, quantity: parseFloat(e.target.value)} : x);
-                      setFormData({...formData, materials: updated});
-                    }} className="chip-qty" />
-                    <button type="button" onClick={() => setFormData({...formData, materials: formData.materials.filter(x => x.id !== m.id)})} className="btn-remove">✕</button>
+                    {isEditing ? (
+                      <input type="number" step="0.01" value={m.quantity} onChange={e => {
+                        const updated = formData.materials.map(x => x.id === m.id ? {...x, quantity: parseFloat(e.target.value)} : x);
+                        setFormData({...formData, materials: updated});
+                      }} className="chip-qty" />
+                    ) : (
+                      <span className="chip-qty-view">x {m.quantity}</span>
+                    )}
+                    {isEditing && <button type="button" onClick={() => setFormData({...formData, materials: formData.materials.filter(x => x.id !== m.id)})} className="btn-remove">✕</button>}
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* SECCIÓN HERRAMIENTAS (Unificado igual a Materiales) */}
+            {/* HERRAMIENTAS */}
             <div className="form-group">
-              <label>Herramientas Sugeridas</label>
-              <input 
-                type="text" 
-                placeholder="🔍 Buscar herramienta..." 
-                value={toolSearch}
-                onChange={e => setToolSearch(e.target.value)}
-                className="form-input search-input-inline"
-              />
-              <select onChange={e => {
-                const tool = tools.find(t => t.id === e.target.value);
-                if (tool && !formData.tools.includes(tool.id)) {
-                  setFormData({...formData, tools: [...formData.tools, tool.id]});
-                  setToolSearch('');
-                }
-              }} className="form-input" value="">
-                <option value="">{filteredTools.length === 0 ? 'Sin resultados' : 'Seleccionar herramienta...'}</option>
-                {filteredTools.map(t => <option key={t.id} value={t.id}>{t.description} ({t.brand})</option>)}
-              </select>
+              <label>Herramientas</label>
+              {isEditing && (
+                <>
+                  <input type="text" placeholder="🔍 Buscar herramienta..." value={toolSearch} onChange={e => setToolSearch(e.target.value)} className="form-input search-input-inline" />
+                  <select onChange={e => {
+                    const tool = tools.find(t => t.id === e.target.value);
+                    if (tool && !formData.tools.includes(tool.id)) {
+                      setFormData({...formData, tools: [...formData.tools, tool.id]});
+                      setToolSearch('');
+                    }
+                  }} className="form-input" value="">
+                    <option value="">Seleccionar herramienta...</option>
+                    {filteredTools.map(t => <option key={t.id} value={t.id}>{t.description}</option>)}
+                  </select>
+                </>
+              )}
               <div className="selected-items-list">
+                {formData.tools.length === 0 && !isEditing && <p className="read-only-placeholder">No se asignaron herramientas.</p>}
                 {formData.tools.map(toolId => {
                   const tool = tools.find(t => t.id === toolId);
                   return (
-                    <div key={toolId} className="item-chip tool-chip">
+                    <div key={toolId} className={`item-chip tool-chip ${!isEditing ? 'view-mode' : ''}`}>
                       <span>{tool?.description || 'Herramienta'}</span>
-                      <button type="button" onClick={() => setFormData({...formData, tools: formData.tools.filter(id => id !== toolId)})} className="btn-remove">✕</button>
+                      {isEditing && <button type="button" onClick={() => setFormData({...formData, tools: formData.tools.filter(id => id !== toolId)})} className="btn-remove">✕</button>}
                     </div>
                   );
                 })}
               </div>
             </div>
 
+            {/* VALOR Y VALIDEZ */}
             <div className="form-row">
               <div className="form-group">
-                <label>Valor Estimado ($)</label>
-                <input type="number" value={formData.estimated_value} onChange={e => setFormData({...formData, estimated_value: parseFloat(e.target.value)})} className="form-input" placeholder="0.00" />
+                <label>Valor Estimado</label>
+                {isEditing ? (
+                  <input type="number" value={formData.estimated_value} onChange={e => setFormData({...formData, estimated_value: parseFloat(e.target.value)})} className="form-input" />
+                ) : (
+                  <div className="read-only-value price-highlight">${Number(formData.estimated_value).toLocaleString()}</div>
+                )}
               </div>
               <div className="form-group">
-                <label>Días de Validez</label>
-                <input type="number" value={formData.validity_days} onChange={e => setFormData({...formData, validity_days: parseInt(e.target.value)})} className="form-input" />
+                <label>Validez (Días)</label>
+                {isEditing ? (
+                  <input type="number" value={formData.validity_days} onChange={e => setFormData({...formData, validity_days: parseInt(e.target.value)})} className="form-input" />
+                ) : (
+                  <div className="read-only-value">{formData.validity_days} días</div>
+                )}
               </div>
             </div>
 
+            {/* ACCIONES */}
             <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={closeForm}>Cancelar</button>
-              <button type="submit" className="btn-primary" disabled={loading}>
-                {editingBudget ? 'Guardar Cambios' : 'Crear Presupuesto'}
+              <button type="button" className="btn-secondary" onClick={closeForm}>
+                {isEditing && editingBudget ? 'Cancelar Edición' : 'Volver'}
               </button>
+              
+              {!isEditing && canEditRole ? (
+                <button type="button" className="btn-primary" onClick={() => setIsEditing(true)}>
+                  ✎ Editar Presupuesto
+                </button>
+              ) : (
+                canEditRole && (
+                  <button type="submit" className="btn-primary" disabled={loading}>
+                    {editingBudget ? 'Guardar Cambios' : 'Crear Presupuesto'}
+                  </button>
+                )
+              )}
             </div>
           </form>
         </div>
