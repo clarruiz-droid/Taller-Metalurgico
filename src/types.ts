@@ -61,13 +61,18 @@ export type BudgetStatus = 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
 
 export interface Budget {
   id: string;
-  client_name: string;
-  date: string;
-  work_description: string;
-  items?: BudgetItem[];
-  labor_cost: number;
-  total_amount: number;
-  status: BudgetStatus;
+  order_number: number;
+  client_id: string;
+  client_name?: string;
+  date_created: string;
+  validity_days: number;
+  short_description: string;
+  long_description: string;
+  images: string[];
+  materials: { id: string; description: string; quantity: number }[];
+  tools: string[]; // IDs de herramientas
+  estimated_value: number;
+  status: 'PENDIENTE' | 'ENVIADO' | 'APROBADO' | 'RECHAZADO';
 }
 
 export type WorkOrderStatus = 'PENDIENTE' | 'PROCESO' | 'FINALIZADO';
