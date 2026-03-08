@@ -10,6 +10,7 @@ const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingTool, setEditingTool] = useState<Tool | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // Estado del formulario
   const [formData, setFormData] = useState({
@@ -30,34 +31,50 @@ const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       .select('*')
       .order('description', { ascending: true });
 
-    if (error) {
-      console.error('Error cargando herramientas:', error);
-    } else {
-      setTools(data || []);
-    }
+    if (!error) setTools(data || []);
     setLoading(false);
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploading(true);
+      if (!event.target.files || event.target.files.length === 0) return;
+
+      const file = event.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Subir a Supabase Storage (Bucket: herramientas)
+      const { error: uploadError } = await supabase.storage
+        .from('herramientas')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Obtener URL pública
+      const { data } = supabase.storage
+        .from('herramientas')
+        .getPublicUrl(filePath);
+
+      setFormData({ ...formData, image_url: data.publicUrl });
+      alert('Imagen de herramienta subida');
+    } catch (error: any) {
+      alert('Error subiendo imagen: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       if (editingTool) {
-        // ACTUALIZAR
-        const { error } = await supabase
-          .from('herramientas')
-          .update(formData)
-          .eq('id', editingTool.id);
-        if (error) throw error;
+        await supabase.from('herramientas').update(formData).eq('id', editingTool.id);
       } else {
-        // CREAR NUEVO
-        const { error } = await supabase
-          .from('herramientas')
-          .insert([formData]);
-        if (error) throw error;
+        await supabase.from('herramientas').insert([formData]);
       }
-
       closeForm();
       await fetchTools();
     } catch (error: any) {
@@ -68,12 +85,9 @@ const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('¿Eliminar esta herramienta del sistema?')) return;
-    setLoading(true);
-    const { error } = await supabase.from('herramientas').delete().eq('id', id);
-    if (error) alert('Error al eliminar');
+    if (!window.confirm('¿Eliminar esta herramienta?')) return;
+    await supabase.from('herramientas').delete().eq('id', id);
     await fetchTools();
-    setLoading(false);
   };
 
   const openEdit = (t: Tool) => {
@@ -126,54 +140,66 @@ const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             />
           </div>
 
-          {loading ? (
-            <div className="loading-state">Cargando herramientas...</div>
-          ) : (
-            <div className="material-list">
-              {filteredTools.length === 0 ? (
-                <p className="empty-msg">No hay herramientas registradas.</p>
-              ) : (
-                filteredTools.map(tool => (
-                  <div key={tool.id} className="material-card tool-card">
-                    <div className="material-img">
-                      {tool.image_url ? (
-                        <img src={tool.image_url} alt={tool.description} />
-                      ) : (
-                        <div className="img-placeholder">🔧</div>
-                      )}
-                    </div>
-                    <div className="material-info">
-                      <div className="tool-header">
-                        <h4>{tool.description}</h4>
-                        <span className="tool-brand">{tool.brand}</span>
-                      </div>
-                      <div className="tool-status-container">
-                        <span className={`status-dot ${getStatusColor(tool.status)}`}></span>
-                        <span className="status-label">{TOOL_STATUS_LABELS[tool.status]}</span>
-                      </div>
-                    </div>
-                    <div className="material-actions">
-                      <button className="btn-action" onClick={() => openEdit(tool)}>✎</button>
-                      <button className="btn-action btn-delete" onClick={() => handleDelete(tool.id)}>🗑</button>
-                    </div>
+          <div className="material-list">
+            {filteredTools.map(tool => (
+              <div key={tool.id} className="material-card tool-card">
+                <div className="material-img">
+                  {tool.image_url ? (
+                    <img src={tool.image_url} alt={tool.description} />
+                  ) : (
+                    <div className="img-placeholder">🔧</div>
+                  )}
+                </div>
+                <div className="material-info">
+                  <div className="tool-header">
+                    <h4>{tool.description}</h4>
+                    <span className="tool-brand">{tool.brand}</span>
                   </div>
-                ))
-              )}
-            </div>
-          )}
+                  <div className="tool-status-container">
+                    <span className={`status-dot ${getStatusColor(tool.status)}`}></span>
+                    <span className="status-label">{TOOL_STATUS_LABELS[tool.status]}</span>
+                  </div>
+                </div>
+                <div className="material-actions">
+                  <button className="btn-action" onClick={() => openEdit(tool)}>✎</button>
+                  <button className="btn-action btn-delete" onClick={() => handleDelete(tool.id)}>🗑</button>
+                </div>
+              </div>
+            ))}
+          </div>
           <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>
         </>
       ) : (
         <div className="material-form-container">
           <h4>{editingTool ? 'Editar Herramienta' : 'Nueva Herramienta'}</h4>
           <form className="material-form" onSubmit={handleSave}>
+            
+            <div className="form-group image-upload-section">
+              <label>Imagen de la Herramienta</label>
+              <div className="preview-container">
+                {formData.image_url ? (
+                  <img src={formData.image_url} alt="Vista previa" className="form-image-preview" />
+                ) : (
+                  <div className="no-image">🔧 Sin imagen</div>
+                )}
+              </div>
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handleFileUpload} 
+                disabled={uploading}
+                className="file-input"
+              />
+              {uploading && <p className="uploading-text">Subiendo...</p>}
+            </div>
+
             <div className="form-group">
               <label>Descripción / Nombre</label>
               <input 
                 type="text" 
                 value={formData.description}
                 onChange={e => setFormData({...formData, description: e.target.value})}
-                placeholder="Ej: Amoladora de mano" required className="form-input" 
+                placeholder="Ej: Taladro de banco" required className="form-input" 
               />
             </div>
 
@@ -183,12 +209,12 @@ const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 type="text" 
                 value={formData.brand}
                 onChange={e => setFormData({...formData, brand: e.target.value})}
-                placeholder="Ej: Makita" required className="form-input" 
+                placeholder="Ej: DeWalt" required className="form-input" 
               />
             </div>
             
             <div className="form-group">
-              <label>Estado de la Herramienta</label>
+              <label>Estado</label>
               <select 
                 value={formData.status}
                 onChange={e => setFormData({...formData, status: e.target.value as ToolStatus})}
@@ -202,7 +228,7 @@ const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={closeForm}>Cancelar</button>
-              <button type="submit" className="btn-primary" disabled={loading}>
+              <button type="submit" className="btn-primary" disabled={loading || uploading}>
                 {loading ? 'Guardando...' : 'Guardar Herramienta'}
               </button>
             </div>
