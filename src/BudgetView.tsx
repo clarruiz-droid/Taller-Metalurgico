@@ -123,13 +123,6 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     setToolSearch('');
   };
 
-  const toggleTool = (id: string) => {
-    const newTools = formData.tools.includes(id) 
-      ? formData.tools.filter(t => t !== id) 
-      : [...formData.tools, id];
-    setFormData({ ...formData, tools: newTools });
-  };
-
   const formatOrder = (num: number) => num?.toString().padStart(6, '0') || '000000';
 
   // Filtrado de materiales y herramientas
@@ -182,7 +175,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
               <select 
                 value={formData.status} 
                 onChange={e => setFormData({...formData, status: e.target.value as Budget['status']})}
-                className="form-input"
+                className="form-input status-select"
               >
                 <option value="EN_PREPARACION">EN PREPARACIÓN</option>
                 <option value="ENVIADO">ENVIADO</option>
@@ -194,16 +187,14 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
             <div className="form-group">
               <label>Cliente</label>
-              <div className="input-with-action">
-                <select 
-                  value={formData.client_id} 
-                  onChange={e => setFormData({...formData, client_id: e.target.value})}
-                  required className="form-input"
-                >
-                  <option value="">Seleccione cliente...</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
+              <select 
+                value={formData.client_id} 
+                onChange={e => setFormData({...formData, client_id: e.target.value})}
+                required className="form-input"
+              >
+                <option value="">Seleccione cliente...</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
             </div>
 
             <div className="form-group">
@@ -216,8 +207,9 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
               <textarea value={formData.long_description} onChange={e => setFormData({...formData, long_description: e.target.value})} className="form-input" rows={4} placeholder="Detalle técnico, medidas, color..."></textarea>
             </div>
 
+            {/* SECCIÓN MATERIALES (Unificado) */}
             <div className="form-group">
-              <label>Materiales (Stock)</label>
+              <label>Materiales Necesarios</label>
               <input 
                 type="text" 
                 placeholder="🔍 Buscar material..." 
@@ -232,14 +224,14 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                   setMaterialSearch('');
                 }
               }} className="form-input" value="">
-                <option value="">{filteredMaterials.length === 0 ? 'No se encontraron materiales' : 'Añadir material del stock...'}</option>
+                <option value="">{filteredMaterials.length === 0 ? 'Sin resultados' : 'Seleccionar material...'}</option>
                 {filteredMaterials.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
               </select>
               <div className="selected-items-list">
                 {formData.materials.map(m => (
                   <div key={m.id} className="item-chip">
                     <span>{m.description}</span>
-                    <input type="number" value={m.quantity} onChange={e => {
+                    <input type="number" step="0.01" value={m.quantity} onChange={e => {
                       const updated = formData.materials.map(x => x.id === m.id ? {...x, quantity: parseFloat(e.target.value)} : x);
                       setFormData({...formData, materials: updated});
                     }} className="chip-qty" />
@@ -249,6 +241,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
               </div>
             </div>
 
+            {/* SECCIÓN HERRAMIENTAS (Unificado igual a Materiales) */}
             <div className="form-group">
               <label>Herramientas Sugeridas</label>
               <input 
@@ -258,20 +251,26 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                 onChange={e => setToolSearch(e.target.value)}
                 className="form-input search-input-inline"
               />
-              <div className="tools-selection-grid">
-                {filteredTools.length === 0 ? (
-                  <p className="no-results-text">No se encontraron herramientas.</p>
-                ) : (
-                  filteredTools.map(t => (
-                    <div 
-                      key={t.id} 
-                      className={`tool-select-card ${formData.tools.includes(t.id) ? 'selected' : ''}`}
-                      onClick={() => toggleTool(t.id)}
-                    >
-                      {t.description}
+              <select onChange={e => {
+                const tool = tools.find(t => t.id === e.target.value);
+                if (tool && !formData.tools.includes(tool.id)) {
+                  setFormData({...formData, tools: [...formData.tools, tool.id]});
+                  setToolSearch('');
+                }
+              }} className="form-input" value="">
+                <option value="">{filteredTools.length === 0 ? 'Sin resultados' : 'Seleccionar herramienta...'}</option>
+                {filteredTools.map(t => <option key={t.id} value={t.id}>{t.description} ({t.brand})</option>)}
+              </select>
+              <div className="selected-items-list">
+                {formData.tools.map(toolId => {
+                  const tool = tools.find(t => t.id === toolId);
+                  return (
+                    <div key={toolId} className="item-chip tool-chip">
+                      <span>{tool?.description || 'Herramienta'}</span>
+                      <button type="button" onClick={() => setFormData({...formData, tools: formData.tools.filter(id => id !== toolId)})} className="btn-remove">✕</button>
                     </div>
-                  ))
-                )}
+                  );
+                })}
               </div>
             </div>
 
