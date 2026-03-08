@@ -47,13 +47,19 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   const fetchData = async () => {
     setLoading(true);
     const [bRes, cRes, mRes, tRes] = await Promise.all([
-      supabase.from('presupuestos').select('*, clientes(name)').order('created_at', { ascending: false }),
+      supabase.from('presupuestos').select('*, clientes(name), profiles:created_by(full_name)').order('created_at', { ascending: false }),
       supabase.from('clientes').select('*').order('name'),
       supabase.from('materiales').select('*').order('description'),
       supabase.from('herramientas').select('*').order('description')
     ]);
 
-    if (!bRes.error) setBudgets(bRes.data.map(b => ({ ...b, client_name: b.clientes?.name })) || []);
+    if (!bRes.error) {
+      setBudgets(bRes.data.map((b: any) => ({ 
+        ...b, 
+        client_name: b.clientes?.name,
+        creator_name: b.profiles?.full_name || 'Desconocido'
+      })) || []);
+    }
     if (!cRes.error) setClients(cRes.data || []);
     if (!mRes.error) setMaterials(mRes.data || []);
     if (!tRes.error) setTools(tRes.data || []);
@@ -76,7 +82,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
       } else {
         const { error } = await supabase
           .from('presupuestos')
-          .insert([formData]);
+          .insert([{ ...formData, created_by: currentUser?.id }]);
         if (error) throw error;
         alert('Presupuesto creado con éxito');
       }
@@ -182,7 +188,11 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                     </span>
                   </div>
                   <h4>{b.short_description}</h4>
-                  <p className="client-tag">👤 {b.client_name}</p>
+                  <div className="budget-meta-list">
+                    <p className="client-tag">👤 {b.client_name}</p>
+                    <p className="meta-tag">📅 {new Date(b.date_created).toLocaleDateString()}</p>
+                    <p className="meta-tag">✍️ {b.creator_name}</p>
+                  </div>
                 </div>
                 <div className="budget-status-val">
                   <span className="price-tag">${Number(b.estimated_value).toLocaleString()}</span>
@@ -355,6 +365,17 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                 )}
               </div>
             </div>
+
+            {/* INFO REGISTRO (Solo lectura) */}
+            {!isEditing && editingBudget && (
+              <div className="form-group registration-info">
+                <label>Información del Registro</label>
+                <div className="read-only-value meta-info-grid">
+                  <span>📅 Creado: {new Date(editingBudget.date_created).toLocaleDateString()}</span>
+                  <span>✍️ Por: {editingBudget.creator_name}</span>
+                </div>
+              </div>
+            )}
 
             {/* ACCIONES */}
             <div className="form-actions">

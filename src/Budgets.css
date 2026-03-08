@@ -53,6 +53,30 @@
   color: #666;
 }
 
+.budget-meta-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.meta-tag {
+  font-size: 0.75rem;
+  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.meta-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #555;
+  background-color: #f0f4f8;
+}
+
 .budget-status-val {
   display: flex;
   flex-direction: column;
