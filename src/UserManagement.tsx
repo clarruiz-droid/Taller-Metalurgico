@@ -59,7 +59,12 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       if (authError) throw authError;
 
       if (authData.user) {
-        await supabase.from('profiles').update({ role: newUser.role }).eq('id', authData.user.id);
+        await supabase.from('profiles').upsert({
+          id: authData.user.id,
+          full_name: newUser.name,
+          role: newUser.role,
+          updated_at: new Date().toISOString()
+        });
       }
 
       alert('Usuario creado con éxito');
