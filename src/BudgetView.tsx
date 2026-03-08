@@ -187,29 +187,6 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
           </div>
           <form className="material-form" onSubmit={handleSave}>
             
-            {/* ESTADO */}
-            <div className="form-group">
-              <label>Estado Actual</label>
-              {isEditing ? (
-                <select 
-                  value={formData.status} 
-                  onChange={e => setFormData({...formData, status: e.target.value as Budget['status']})}
-                  className="form-input status-select"
-                >
-                  <option value="PENDIENTE">PENDIENTE</option>
-                  <option value="EN_PREPARACION">EN PREPARACIÓN</option>
-                  <option value="ENVIADO">ENVIADO</option>
-                  <option value="APROBADO">APROBADO</option>
-                  <option value="RECHAZADO">RECHAZADO</option>
-                  <option value="FINALIZADO">FINALIZADO</option>
-                </select>
-              ) : (
-                <div className={`read-only-badge status-${formData.status.toLowerCase().replace('_', '-')}`}>
-                  {formData.status.replace('_', ' ')}
-                </div>
-              )}
-            </div>
-
             {/* CLIENTE */}
             <div className="form-group">
               <label>Cliente</label>
@@ -234,6 +211,29 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                 <input type="text" value={formData.short_description} onChange={e => setFormData({...formData, short_description: e.target.value})} placeholder="Ej: Reja ventana frente" required className="form-input" />
               ) : (
                 <div className="read-only-value highlight">{formData.short_description}</div>
+              )}
+            </div>
+
+            {/* ESTADO */}
+            <div className="form-group status-group-highlight">
+              <label>Estado Actual</label>
+              {isEditing ? (
+                <select 
+                  value={formData.status} 
+                  onChange={e => setFormData({...formData, status: e.target.value as Budget['status']})}
+                  className="form-input status-select-primary"
+                >
+                  <option value="PENDIENTE">PENDIENTE</option>
+                  <option value="EN_PREPARACION">EN PREPARACIÓN</option>
+                  <option value="ENVIADO">ENVIADO</option>
+                  <option value="APROBADO">APROBADO</option>
+                  <option value="RECHAZADO">RECHAZADO</option>
+                  <option value="FINALIZADO">FINALIZADO</option>
+                </select>
+              ) : (
+                <div className={`read-only-badge status-${formData.status.toLowerCase().replace('_', '-')}`}>
+                  {formData.status.replace('_', ' ')}
+                </div>
               )}
             </div>
 
