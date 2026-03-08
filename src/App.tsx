@@ -22,7 +22,7 @@ function App() {
     checkUser();
 
     // 2. Escuchar cambios en la autenticación
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
         fetchProfile(session.user.id, session.user.email || '');
       } else {

@@ -60,8 +60,8 @@ const MaterialInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             filteredMaterials.map(material => (
               <div key={material.id} className="material-card">
                 <div className="material-img">
-                  {material.imageUrl ? (
-                    <img src={material.imageUrl} alt={material.description} />
+                  {material.image_url ? (
+                    <img src={material.image_url} alt={material.description} />
                   ) : (
                     <div className="img-placeholder">📦</div>
                   )}
@@ -69,10 +69,10 @@ const MaterialInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 <div className="material-info">
                   <h4>{material.description}</h4>
                   <div className="material-stats">
-                    <span className={`stock-badge ${material.quantity <= material.minStock ? 'low-stock' : 'ok-stock'}`}>
+                    <span className={`stock-badge ${material.quantity <= material.min_stock ? 'low-stock' : 'ok-stock'}`}>
                       {material.quantity} {material.unit}
                     </span>
-                    <span className="min-stock-text">Mín: {material.minStock}</span>
+                    <span className="min-stock-text">Mín: {material.min_stock}</span>
                   </div>
                 </div>
                 <div className="material-actions">
