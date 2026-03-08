@@ -35,20 +35,59 @@ const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setLoading(false);
   };
 
+  // Función para redimensionar la imagen antes de subirla
+  const resizeImage = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 300;
+        const MAX_HEIGHT = 300;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Error al procesar imagen'));
+          }, 'image/webp', 0.8);
+        }
+      };
+      img.onerror = reject;
+    });
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploading(true);
       if (!event.target.files || event.target.files.length === 0) return;
 
       const file = event.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
+      const resizedBlob = await resizeImage(file);
+      const fileName = `${Math.random()}.webp`;
       const filePath = `${fileName}`;
 
       // Subir a Supabase Storage (Bucket: herramientas)
       const { error: uploadError } = await supabase.storage
         .from('herramientas')
-        .upload(filePath, file);
+        .upload(filePath, resizedBlob, { contentType: 'image/webp' });
 
       if (uploadError) throw uploadError;
 
@@ -58,7 +97,7 @@ const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         .getPublicUrl(filePath);
 
       setFormData({ ...formData, image_url: data.publicUrl });
-      alert('Imagen de herramienta subida');
+      alert('Imagen de herramienta optimizada');
     } catch (error: any) {
       alert('Error subiendo imagen: ' + error.message);
     } finally {
@@ -190,7 +229,7 @@ const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 disabled={uploading}
                 className="file-input"
               />
-              {uploading && <p className="uploading-text">Subiendo...</p>}
+              {uploading && <p className="uploading-text">Optimizando y subiendo...</p>}
             </div>
 
             <div className="form-group">
