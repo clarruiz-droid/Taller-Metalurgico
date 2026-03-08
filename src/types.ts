@@ -72,7 +72,7 @@ export interface Budget {
   materials: { id: string; description: string; quantity: number }[];
   tools: string[]; // IDs de herramientas
   estimated_value: number;
-  status: 'PENDIENTE' | 'ENVIADO' | 'APROBADO' | 'RECHAZADO';
+  status: 'EN_PREPARACION' | 'ENVIADO' | 'APROBADO' | 'RECHAZADO' | 'FINALIZADO';
 }
 
 export type WorkOrderStatus = 'PENDIENTE' | 'PROCESO' | 'FINALIZADO';

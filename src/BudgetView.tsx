@@ -18,6 +18,10 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
+  // Estados de búsqueda
+  const [materialSearch, setMaterialSearch] = useState('');
+  const [toolSearch, setToolSearch] = useState('');
+
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
 
   const initialFormData = {
@@ -26,7 +30,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     short_description: '',
     long_description: '',
     estimated_value: 0,
-    status: 'PENDIENTE' as Budget['status'],
+    status: 'EN_PREPARACION' as Budget['status'],
     images: [] as string[],
     materials: [] as { id: string; description: string; quantity: number }[],
     tools: [] as string[]
@@ -115,6 +119,8 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     setShowForm(false);
     setEditingBudget(null);
     setFormData(initialFormData);
+    setMaterialSearch('');
+    setToolSearch('');
   };
 
   const toggleTool = (id: string) => {
@@ -125,6 +131,16 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   };
 
   const formatOrder = (num: number) => num?.toString().padStart(6, '0') || '000000';
+
+  // Filtrado de materiales y herramientas
+  const filteredMaterials = materials.filter(m => 
+    m.description.toLowerCase().includes(materialSearch.toLowerCase())
+  );
+
+  const filteredTools = tools.filter(t => 
+    t.description.toLowerCase().includes(toolSearch.toLowerCase()) ||
+    t.brand.toLowerCase().includes(toolSearch.toLowerCase())
+  );
 
   return (
     <div className="inventory-view">
@@ -145,7 +161,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                   <p className="client-tag">👤 {b.client_name}</p>
                 </div>
                 <div className="budget-status-val">
-                  <span className={`role-badge status-${b.status.toLowerCase()}`}>{b.status}</span>
+                  <span className={`role-badge status-${b.status.toLowerCase().replace('_', '-')}`}>{b.status.replace('_', ' ')}</span>
                   <span className="price-tag">${Number(b.estimated_value).toLocaleString()}</span>
                   {canEdit && (
                     <button className="btn-delete-small" onClick={(e) => handleDelete(e, b.id)}>🗑</button>
@@ -168,10 +184,11 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                 onChange={e => setFormData({...formData, status: e.target.value as Budget['status']})}
                 className="form-input"
               >
-                <option value="PENDIENTE">PENDIENTE</option>
+                <option value="EN_PREPARACION">EN PREPARACIÓN</option>
                 <option value="ENVIADO">ENVIADO</option>
                 <option value="APROBADO">APROBADO</option>
                 <option value="RECHAZADO">RECHAZADO</option>
+                <option value="FINALIZADO">FINALIZADO</option>
               </select>
             </div>
 
@@ -201,14 +218,22 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
             <div className="form-group">
               <label>Materiales (Stock)</label>
+              <input 
+                type="text" 
+                placeholder="🔍 Buscar material..." 
+                value={materialSearch}
+                onChange={e => setMaterialSearch(e.target.value)}
+                className="form-input search-input-inline"
+              />
               <select onChange={e => {
                 const mat = materials.find(m => m.id === e.target.value);
                 if (mat && !formData.materials.find(x => x.id === mat.id)) {
                   setFormData({...formData, materials: [...formData.materials, { id: mat.id, description: mat.description, quantity: 1 }]});
+                  setMaterialSearch('');
                 }
-              }} className="form-input">
-                <option value="">Añadir material del inventario...</option>
-                {materials.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
+              }} className="form-input" value="">
+                <option value="">{filteredMaterials.length === 0 ? 'No se encontraron materiales' : 'Añadir material del stock...'}</option>
+                {filteredMaterials.map(m => <option key={m.id} value={m.id}>{m.description}</option>)}
               </select>
               <div className="selected-items-list">
                 {formData.materials.map(m => (
@@ -226,16 +251,27 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
             <div className="form-group">
               <label>Herramientas Sugeridas</label>
+              <input 
+                type="text" 
+                placeholder="🔍 Buscar herramienta..." 
+                value={toolSearch}
+                onChange={e => setToolSearch(e.target.value)}
+                className="form-input search-input-inline"
+              />
               <div className="tools-selection-grid">
-                {tools.map(t => (
-                  <div 
-                    key={t.id} 
-                    className={`tool-select-card ${formData.tools.includes(t.id) ? 'selected' : ''}`}
-                    onClick={() => toggleTool(t.id)}
-                  >
-                    {t.description}
-                  </div>
-                ))}
+                {filteredTools.length === 0 ? (
+                  <p className="no-results-text">No se encontraron herramientas.</p>
+                ) : (
+                  filteredTools.map(t => (
+                    <div 
+                      key={t.id} 
+                      className={`tool-select-card ${formData.tools.includes(t.id) ? 'selected' : ''}`}
+                      onClick={() => toggleTool(t.id)}
+                    >
+                      {t.description}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
