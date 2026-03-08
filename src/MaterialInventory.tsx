@@ -216,6 +216,7 @@ const MaterialInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <input 
                 type="file" 
                 accept="image/*" 
+                capture="environment"
                 onChange={handleFileUpload} 
                 disabled={uploading}
                 className="file-input"
