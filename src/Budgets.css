@@ -88,10 +88,15 @@
   border: 2px solid var(--secondary-color) !important;
 }
 
+.budget-detail-view {
+  margin-top: 2.5rem;
+}
+
 .form-header-title {
-  margin-bottom: 1.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 2rem;
   border-bottom: 2px solid var(--secondary-color);
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.8rem;
 }
 
 .form-header-title h4 {

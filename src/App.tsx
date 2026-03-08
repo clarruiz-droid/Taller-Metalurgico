@@ -111,10 +111,12 @@ function App() {
                   <span className="icon">🔧</span>
                   <span>Herramientas</span>
                 </button>
-                <button className="menu-item" onClick={() => setActiveView('CLIENTS')}>
-                  <span className="icon">🤝</span>
-                  <span>Clientes</span>
-                </button>
+                {(currentUser.role === 'ADMIN' || currentUser.role === 'GERENTE' || currentUser.role === 'SUPERVISOR') && (
+                  <button className="menu-item" onClick={() => setActiveView('CLIENTS')}>
+                    <span className="icon">🤝</span>
+                    <span>Clientes</span>
+                  </button>
+                )}
                 {(currentUser.role === 'ADMIN' || currentUser.role === 'GERENTE' || currentUser.role === 'SUPERVISOR') && (
                   <button className="menu-item" onClick={() => setActiveView('BUDGETS')}>
                     <span className="icon">📄</span>
@@ -155,7 +157,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>&copy; 2026 Taller Metalúrgico - v1.2.1</p>
+        <p>&copy; 2026 Taller Metalúrgico - v1.2.2</p>
       </footer>
     </div>
   )
