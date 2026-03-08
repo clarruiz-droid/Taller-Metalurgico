@@ -5,7 +5,6 @@ import { ROLE_LABELS } from './types';
 import { supabase } from './lib/supabase';
 import './UserManagement.css';
 
-// Obtenemos las credenciales para el cliente temporal
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -15,13 +14,11 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   
-  // Estado para nuevo usuario
-  const [newUser, setNewUser] = useState({ 
-    username: '', 
-    password: '', 
-    name: '', 
-    role: 'OPERARIO' as UserRole 
-  });
+  // Estado para NUEVO usuario
+  const [newUser, setNewUser] = useState({ username: '', password: '', name: '', role: 'OPERARIO' as UserRole });
+  
+  // Estado para EDITAR usuario
+  const [editData, setEditData] = useState({ name: '', role: 'OPERARIO' as UserRole });
 
   useEffect(() => {
     fetchUsers();
@@ -34,9 +31,7 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       .select('*')
       .order('full_name', { ascending: true });
 
-    if (error) {
-      console.error('Error cargando usuarios:', error);
-    } else {
+    if (!error) {
       const mappedUsers: User[] = (data || []).map(profile => ({
         id: profile.id,
         username: profile.id.substring(0, 8),
@@ -51,42 +46,27 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      // 1. Crear un cliente temporal que NO guarde sesión (para no desloguear al admin)
-      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false }
-      });
-
+      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
       const virtualEmail = `${newUser.username.trim().toLowerCase()}@taller.com`;
 
-      // 2. Registrar el usuario en la Autenticación
       const { data: authData, error: authError } = await tempSupabase.auth.signUp({
         email: virtualEmail,
         password: newUser.password,
-        options: {
-          data: { full_name: newUser.name }
-        }
+        options: { data: { full_name: newUser.name } }
       });
 
       if (authError) throw authError;
 
-      // 3. El trigger de la DB ya creó el perfil, ahora le asignamos el rol elegido
       if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ role: newUser.role })
-          .eq('id', authData.user.id);
-        
-        if (profileError) throw profileError;
+        await supabase.from('profiles').update({ role: newUser.role }).eq('id', authData.user.id);
       }
 
       alert('Usuario creado con éxito');
-      setShowForm(false);
-      setNewUser({ username: '', password: '', name: '', role: 'OPERARIO' });
+      closeForm();
       await fetchUsers();
     } catch (error: any) {
-      alert('Error: ' + (error.message || 'No se pudo crear el usuario'));
+      alert('Error: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -99,14 +79,13 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: newUser.name, role: newUser.role })
+      .update({ full_name: editData.name, role: editData.role })
       .eq('id', editingUser.id);
 
     if (error) {
       alert('Error al actualizar');
     } else {
-      setEditingUser(null);
-      setShowForm(false);
+      closeForm();
       await fetchUsers();
     }
     setLoading(false);
@@ -114,8 +93,22 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const handleDeleteUser = async (userId: string) => {
     if (!window.confirm('¿Eliminar acceso de este usuario?')) return;
+    setLoading(true);
     await supabase.from('profiles').delete().eq('id', userId);
     await fetchUsers();
+    setLoading(false);
+  };
+
+  const openEdit = (user: User) => {
+    setEditingUser(user);
+    setEditData({ name: user.name, role: user.role });
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingUser(null);
+    setNewUser({ username: '', password: '', name: '', role: 'OPERARIO' });
   };
 
   const getRoleColor = (role: UserRole) => {
@@ -146,21 +139,13 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   <span className={`role-badge ${getRoleColor(user.role)}`}>{ROLE_LABELS[user.role]}</span>
                 </div>
                 <div className="user-card-actions">
-                  <button className="btn-action" onClick={() => {
-                    setEditingUser(user);
-                    setNewUser({ ...newUser, name: user.name, role: user.role });
-                    setShowForm(true);
-                  }}>✎</button>
+                  <button className="btn-action" onClick={() => openEdit(user)}>✎</button>
                   <button className="btn-action btn-delete" onClick={() => handleDeleteUser(user.id)}>🗑</button>
                 </div>
               </div>
             ))}
           </div>
-          <button className="btn-fab" onClick={() => {
-            setEditingUser(null);
-            setNewUser({ username: '', password: '', name: '', role: 'OPERARIO' });
-            setShowForm(true);
-          }}>+</button>
+          <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>
         </>
       ) : (
         <div className="user-form-container">
@@ -170,8 +155,10 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <label>Nombre Completo</label>
               <input 
                 type="text" 
-                value={newUser.name}
-                onChange={e => setNewUser({...newUser, name: e.target.value})}
+                value={editingUser ? editData.name : newUser.name}
+                onChange={e => editingUser 
+                  ? setEditData({...editData, name: e.target.value}) 
+                  : setNewUser({...newUser, name: e.target.value})}
                 placeholder="Ej: Pedro González" required className="form-input" 
               />
             </div>
@@ -202,8 +189,10 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <div className="form-group">
               <label>Rol Asignado</label>
               <select 
-                value={newUser.role}
-                onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}
+                value={editingUser ? editData.role : newUser.role}
+                onChange={e => editingUser
+                  ? setEditData({...editData, role: e.target.value as UserRole})
+                  : setNewUser({...newUser, role: e.target.value as UserRole})}
                 className="form-input"
               >
                 {Object.entries(ROLE_LABELS).map(([key, label]) => (
@@ -213,7 +202,7 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </div>
             
             <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
+              <button type="button" className="btn-secondary" onClick={closeForm}>Cancelar</button>
               <button type="submit" className="btn-primary" disabled={loading}>
                 {loading ? 'Procesando...' : (editingUser ? 'Guardar Cambios' : 'Crear Usuario')}
               </button>
