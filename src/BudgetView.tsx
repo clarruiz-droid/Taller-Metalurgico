@@ -17,10 +17,11 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showClientForm, setShowClientForm] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
   const canEdit = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
 
-  const [formData, setFormData] = useState({
+  const initialFormData = {
     client_id: '',
     validity_days: 15,
     short_description: '',
@@ -30,8 +31,9 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     images: [] as string[],
     materials: [] as { id: string; description: string; quantity: number }[],
     tools: [] as string[]
-  });
+  };
 
+  const [formData, setFormData] = useState(initialFormData);
   const [newClient, setNewClient] = useState({ name: '', phone: '' });
 
   useEffect(() => {
@@ -54,25 +56,67 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     setLoading(false);
   };
 
-  const handleQuickClient = async () => {
-    if (!newClient.name) return;
-    const { data, error } = await supabase.from('clientes').insert([newClient]).select();
-    if (!error && data) {
-      setClients([...clients, data[0]]);
-      setFormData({ ...formData, client_id: data[0].id });
-      setShowClientForm(false);
-      setNewClient({ name: '', phone: '' });
-    }
-  };
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canEdit) return;
     setLoading(true);
-    const { error } = await supabase.from('presupuestos').insert([formData]);
-    if (error) alert('Error: ' + error.message);
-    else { setShowForm(false); fetchData(); }
+    
+    try {
+      if (editingBudget) {
+        const { error } = await supabase
+          .from('presupuestos')
+          .update(formData)
+          .eq('id', editingBudget.id);
+        if (error) throw error;
+        alert('Presupuesto actualizado');
+      } else {
+        const { error } = await supabase
+          .from('presupuestos')
+          .insert([formData]);
+        if (error) throw error;
+        alert('Presupuesto creado');
+      }
+      closeForm();
+      fetchData();
+    } catch (error: any) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!canEdit) return;
+    if (!window.confirm('¿Eliminar este presupuesto permanentemente?')) return;
+    
+    setLoading(true);
+    const { error } = await supabase.from('presupuestos').delete().eq('id', id);
+    if (error) alert('Error al eliminar');
+    else fetchData();
     setLoading(false);
+  };
+
+  const openEdit = (b: Budget) => {
+    setEditingBudget(b);
+    setFormData({
+      client_id: b.client_id,
+      validity_days: b.validity_days,
+      short_description: b.short_description,
+      long_description: b.long_description || '',
+      estimated_value: b.estimated_value,
+      status: b.status,
+      images: b.images || [],
+      materials: b.materials || [],
+      tools: b.tools || []
+    });
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingBudget(null);
+    setFormData(initialFormData);
   };
 
   const toggleTool = (id: string) => {
@@ -94,8 +138,9 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
       {!showForm ? (
         <>
           <div className="budget-list">
+            {budgets.length === 0 && !loading && <p className="empty-msg">No hay presupuestos registrados.</p>}
             {budgets.map(b => (
-              <div key={b.id} className="material-card budget-card">
+              <div key={b.id} className="material-card budget-card clickable" onClick={() => openEdit(b)}>
                 <div className="budget-info-main">
                   <span className="budget-number">#{formatOrder(b.order_number)}</span>
                   <h4>{b.short_description}</h4>
@@ -104,6 +149,9 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                 <div className="budget-status-val">
                   <span className={`role-badge status-${b.status.toLowerCase()}`}>{b.status}</span>
                   <span className="price-tag">${Number(b.estimated_value).toLocaleString()}</span>
+                  {canEdit && (
+                    <button className="btn-delete-small" onClick={(e) => handleDelete(e, b.id)}>🗑</button>
+                  )}
                 </div>
               </div>
             ))}
@@ -112,9 +160,23 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
         </>
       ) : (
         <div className="material-form-container">
-          <h4>Nuevo Presupuesto</h4>
+          <h4>{editingBudget ? `Editando Presupuesto #${formatOrder(editingBudget.order_number)}` : 'Nuevo Presupuesto'}</h4>
           <form className="material-form" onSubmit={handleSave}>
             
+            <div className="form-group">
+              <label>Estado del Presupuesto</label>
+              <select 
+                value={formData.status} 
+                onChange={e => setFormData({...formData, status: e.target.value as Budget['status']})}
+                className="form-input"
+              >
+                <option value="PENDIENTE">PENDIENTE</option>
+                <option value="ENVIADO">ENVIADO</option>
+                <option value="APROBADO">APROBADO</option>
+                <option value="RECHAZADO">RECHAZADO</option>
+              </select>
+            </div>
+
             <div className="form-group">
               <label>Cliente</label>
               <div className="input-with-action">
@@ -126,18 +188,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
                   <option value="">Seleccione cliente...</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
-                <button type="button" className="btn-small" onClick={() => setShowClientForm(!showClientForm)}>
-                  {showClientForm ? '✕' : '+'}
-                </button>
               </div>
-              
-              {showClientForm && (
-                <div className="quick-form">
-                  <input type="text" placeholder="Nombre" value={newClient.name} onChange={e => setNewClient({...newClient, name: e.target.value})} className="form-input" />
-                  <input type="text" placeholder="Teléfono" value={newClient.phone} onChange={e => setNewClient({...newClient, phone: e.target.value})} className="form-input" />
-                  <button type="button" onClick={handleQuickClient} className="btn-primary-small">Crear Cliente</button>
-                </div>
-              )}
             </div>
 
             <div className="form-group">
@@ -146,7 +197,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
             </div>
 
             <div className="form-group">
-              <label>Descripción Larga (Detalle)</label>
+              <label>Descripción Larga (Detalle Técnico)</label>
               <textarea value={formData.long_description} onChange={e => setFormData({...formData, long_description: e.target.value})} className="form-input" rows={4} placeholder="Detalle técnico, medidas, color..."></textarea>
             </div>
 
@@ -202,8 +253,10 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
             </div>
 
             <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
-              <button type="submit" className="btn-primary" disabled={loading}>Guardar Presupuesto</button>
+              <button type="button" className="btn-secondary" onClick={closeForm}>Cancelar</button>
+              <button type="submit" className="btn-primary" disabled={loading}>
+                {editingBudget ? 'Guardar Cambios' : 'Crear Presupuesto'}
+              </button>
             </div>
           </form>
         </div>
