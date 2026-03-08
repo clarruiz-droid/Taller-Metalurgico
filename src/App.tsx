@@ -74,9 +74,9 @@ function App() {
 
     switch (activeView) {
       case 'MATERIAL_INVENTORY':
-        return <MaterialInventory onBack={() => setActiveView('DASHBOARD')} />;
+        return <MaterialInventory onBack={() => setActiveView('DASHBOARD')} currentUser={currentUser} />;
       case 'TOOLS':
-        return <ToolInventory onBack={() => setActiveView('DASHBOARD')} />;
+        return <ToolInventory onBack={() => setActiveView('DASHBOARD')} currentUser={currentUser} />;
       case 'CLIENTS':
         return <ClientManagement onBack={() => setActiveView('DASHBOARD')} />;
       case 'BUDGETS':
@@ -155,7 +155,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>&copy; 2026 Taller Metalúrgico - v1.2.0</p>
+        <p>&copy; 2026 Taller Metalúrgico - v1.2.1</p>
       </footer>
     </div>
   )

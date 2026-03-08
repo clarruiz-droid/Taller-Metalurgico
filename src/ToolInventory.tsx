@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import type { Tool, ToolStatus } from './types';
-import { TOOL_STATUS_LABELS } from './types';
+import type { Tool, ToolStatus, User } from './types';
 import { supabase } from './lib/supabase';
+import { TOOL_STATUS_LABELS } from './types';
 import './Inventory.css';
 
-const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+const ToolInventory: React.FC<{ onBack: () => void; currentUser: User | null }> = ({ onBack, currentUser }) => {
   const [tools, setTools] = useState<Tool[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingTool, setEditingTool] = useState<Tool | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'GERENTE' || currentUser?.role === 'SUPERVISOR';
 
   // Estado del formulario
   const [formData, setFormData] = useState({
@@ -200,13 +202,17 @@ const ToolInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   </div>
                 </div>
                 <div className="material-actions">
-                  <button className="btn-action" onClick={() => openEdit(tool)}>✎</button>
-                  <button className="btn-action btn-delete" onClick={() => handleDelete(tool.id)}>🗑</button>
+                  {canEditRole && (
+                    <>
+                      <button className="btn-action" onClick={() => openEdit(tool)}>✎</button>
+                      <button className="btn-action btn-delete" onClick={() => handleDelete(tool.id)}>🗑</button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
           </div>
-          <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>
+          {canEditRole && <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>}
         </>
       ) : (
         <div className="material-form-container">

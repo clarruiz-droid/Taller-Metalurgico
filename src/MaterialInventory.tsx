@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import type { Material } from './types';
+import type { Material, User } from './types';
 import { supabase } from './lib/supabase';
 import './Inventory.css';
 
-const MaterialInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+const MaterialInventory: React.FC<{ onBack: () => void; currentUser: User | null }> = ({ onBack, currentUser }) => {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'GERENTE' || currentUser?.role === 'SUPERVISOR';
 
   // Estado del formulario
   const [formData, setFormData] = useState({
@@ -191,13 +193,17 @@ const MaterialInventory: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   </div>
                 </div>
                 <div className="material-actions">
-                  <button className="btn-action" onClick={() => openEdit(material)}>✎</button>
-                  <button className="btn-action btn-delete" onClick={() => handleDelete(material.id)}>🗑</button>
+                  {canEditRole && (
+                    <>
+                      <button className="btn-action" onClick={() => openEdit(material)}>✎</button>
+                      <button className="btn-action btn-delete" onClick={() => handleDelete(material.id)}>🗑</button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
           </div>
-          <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>
+          {canEditRole && <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>}
         </>
       ) : (
         <div className="material-form-container">
