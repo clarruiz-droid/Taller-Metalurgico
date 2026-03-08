@@ -14,11 +14,13 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   
-  // Estado para NUEVO usuario
-  const [newUser, setNewUser] = useState({ username: '', password: '', name: '', role: 'OPERARIO' as UserRole });
-  
-  // Estado para EDITAR usuario
-  const [editData, setEditData] = useState({ name: '', role: 'OPERARIO' as UserRole });
+  // Estado único para el formulario (Alta y Edición)
+  const [formData, setFormData] = useState({ 
+    username: '', 
+    password: '', 
+    name: '', 
+    role: 'OPERARIO' as UserRole 
+  });
 
   useEffect(() => {
     fetchUsers();
@@ -43,31 +45,46 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setLoading(false);
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
-      const virtualEmail = `${newUser.username.trim().toLowerCase()}@taller.com`;
+      if (editingUser) {
+        // --- MODO EDICIÓN ---
+        const { error } = await supabase
+          .from('profiles')
+          .update({ 
+            full_name: formData.name, 
+            role: formData.role,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingUser.id);
 
-      const { data: authData, error: authError } = await tempSupabase.auth.signUp({
-        email: virtualEmail,
-        password: newUser.password,
-        options: { data: { full_name: newUser.name } }
-      });
+        if (error) throw error;
+        alert('Datos actualizados correctamente');
+      } else {
+        // --- MODO ALTA ---
+        const tempSupabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
+        const virtualEmail = `${formData.username.trim().toLowerCase()}@taller.com`;
 
-      if (authError) throw authError;
-
-      if (authData.user) {
-        await supabase.from('profiles').upsert({
-          id: authData.user.id,
-          full_name: newUser.name,
-          role: newUser.role,
-          updated_at: new Date().toISOString()
+        const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+          email: virtualEmail,
+          password: formData.password,
+          options: { data: { full_name: formData.name } }
         });
-      }
 
-      alert('Usuario creado con éxito');
+        if (authError) throw authError;
+
+        if (authData.user) {
+          await supabase.from('profiles').upsert({
+            id: authData.user.id,
+            full_name: formData.name,
+            role: formData.role,
+            updated_at: new Date().toISOString()
+          });
+        }
+        alert('Usuario creado con éxito');
+      }
       closeForm();
       await fetchUsers();
     } catch (error: any) {
@@ -75,25 +92,6 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleUpdateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    setLoading(true);
-    
-    const { error } = await supabase
-      .from('profiles')
-      .update({ full_name: editData.name, role: editData.role })
-      .eq('id', editingUser.id);
-
-    if (error) {
-      alert('Error al actualizar');
-    } else {
-      closeForm();
-      await fetchUsers();
-    }
-    setLoading(false);
   };
 
   const handleDeleteUser = async (userId: string) => {
@@ -106,14 +104,19 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const openEdit = (user: User) => {
     setEditingUser(user);
-    setEditData({ name: user.name, role: user.role });
+    setFormData({ 
+      username: 'Solo Lectura', // El usuario no se puede cambiar fácilmente en Auth
+      password: '', // La contraseña no se puede leer, solo resetear
+      name: user.name, 
+      role: user.role 
+    });
     setShowForm(true);
   };
 
   const closeForm = () => {
     setShowForm(false);
     setEditingUser(null);
-    setNewUser({ username: '', password: '', name: '', role: 'OPERARIO' });
+    setFormData({ username: '', password: '', name: '', role: 'OPERARIO' });
   };
 
   const getRoleColor = (role: UserRole) => {
@@ -155,49 +158,48 @@ const UserManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       ) : (
         <div className="user-form-container">
           <h4>{editingUser ? 'Editar Empleado' : 'Nuevo Empleado'}</h4>
-          <form className="user-form" onSubmit={editingUser ? handleUpdateUser : handleCreateUser}>
+          <form className="user-form" onSubmit={handleSave}>
             <div className="form-group">
               <label>Nombre Completo</label>
               <input 
                 type="text" 
-                value={editingUser ? editData.name : newUser.name}
-                onChange={e => editingUser 
-                  ? setEditData({...editData, name: e.target.value}) 
-                  : setNewUser({...newUser, name: e.target.value})}
+                value={formData.name}
+                onChange={e => setFormData({...formData, name: e.target.value})}
                 placeholder="Ej: Pedro González" required className="form-input" 
               />
             </div>
             
+            <div className="form-group">
+              <label>Usuario (Legajo)</label>
+              <input 
+                type="text" 
+                value={formData.username}
+                onChange={e => setFormData({...formData, username: e.target.value})}
+                placeholder="p.gonzalez" 
+                disabled={!!editingUser}
+                required={!editingUser}
+                className="form-input" 
+              />
+              {editingUser && <small className="input-hint">El nombre de usuario no es editable por seguridad.</small>}
+            </div>
+
             {!editingUser && (
-              <>
-                <div className="form-group">
-                  <label>Usuario (Legajo)</label>
-                  <input 
-                    type="text" 
-                    value={newUser.username}
-                    onChange={e => setNewUser({...newUser, username: e.target.value})}
-                    placeholder="p.gonzalez" required className="form-input" 
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Contraseña Inicial</label>
-                  <input 
-                    type="password" 
-                    value={newUser.password}
-                    onChange={e => setNewUser({...newUser, password: e.target.value})}
-                    placeholder="Min. 6 caracteres" required className="form-input" 
-                  />
-                </div>
-              </>
+              <div className="form-group">
+                <label>Contraseña Inicial</label>
+                <input 
+                  type="password" 
+                  value={formData.password}
+                  onChange={e => setFormData({...formData, password: e.target.value})}
+                  placeholder="Min. 6 caracteres" required className="form-input" 
+                />
+              </div>
             )}
 
             <div className="form-group">
               <label>Rol Asignado</label>
               <select 
-                value={editingUser ? editData.role : newUser.role}
-                onChange={e => editingUser
-                  ? setEditData({...editData, role: e.target.value as UserRole})
-                  : setNewUser({...newUser, role: e.target.value as UserRole})}
+                value={formData.role}
+                onChange={e => setFormData({...formData, role: e.target.value as UserRole})}
                 className="form-input"
               >
                 {Object.entries(ROLE_LABELS).map(([key, label]) => (
