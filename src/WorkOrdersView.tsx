@@ -139,23 +139,24 @@ const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             {filteredOrders.length === 0 && !loading && <p className="empty-msg">No hay órdenes que coincidan con la búsqueda.</p>}
             {filteredOrders.map(wo => (
               <div key={wo.id} className="material-card wo-card clickable" onClick={() => openEdit(wo)}>
-              <div className="wo-priority-indicator" style={{ backgroundColor: getPriorityColor(wo.priority) }}></div>
-              <div className="material-info">
-                <div className="tool-header">
-                  <h4>{wo.client_name}</h4>
-                  <span className={`status-badge status-${wo.status.toLowerCase()}`}>
-                    {WORK_ORDER_STATUS_LABELS[wo.status]}
-                  </span>
-                </div>
-                <p className="wo-desc">{wo.description}</p>
-                <div className="budget-meta-list">
-                  <span className="meta-tag">👤 {wo.assigned_to_name}</span>
-                  <span className="meta-tag">📅 Entrega: {new Date(wo.estimated_end_date).toLocaleDateString()}</span>
+                <div className="wo-priority-indicator" style={{ backgroundColor: getPriorityColor(wo.priority) }}></div>
+                <div className="material-info">
+                  <div className="tool-header">
+                    <h4>{wo.client_name}</h4>
+                    <span className={`status-badge status-${wo.status.toLowerCase()}`}>
+                      {WORK_ORDER_STATUS_LABELS[wo.status]}
+                    </span>
+                  </div>
+                  <p className="wo-desc">{wo.description}</p>
+                  <div className="budget-meta-list">
+                    <span className="meta-tag">👤 {wo.assigned_to_name}</span>
+                    <span className="meta-tag">📅 Entrega: {new Date(wo.estimated_end_date).toLocaleDateString()}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       ) : (
         <div className="material-form-container">
           <form className="material-form" onSubmit={handleSave}>

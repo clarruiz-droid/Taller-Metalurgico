@@ -234,7 +234,8 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
   const filteredBudgets = budgets.filter(b => {
     const matchesStatus = statusFilter === 'ALL' || b.status === statusFilter;
-    const matchesClient = b.client_name.toLowerCase().includes(clientSearch.toLowerCase());
+    const clientName = b.client_name || '';
+    const matchesClient = clientName.toLowerCase().includes(clientSearch.toLowerCase());
     return matchesStatus && matchesClient;
   });
 
