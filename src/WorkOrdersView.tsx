@@ -41,13 +41,15 @@ const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       }
       
       if (!uRes.error) {
-        // Mapeamos para que coincida con la interfaz User si es necesario
-        const mappedUsers = uRes.data.map((p: any) => ({
-          id: p.id,
-          name: p.full_name,
-          role: p.role,
-          username: ''
-        }));
+        // Filtramos solo Operarios y Supervisores y mapeamos a la interfaz User
+        const mappedUsers = uRes.data
+          .filter((p: any) => p.role === 'OPERARIO' || p.role === 'SUPERVISOR')
+          .map((p: any) => ({
+            id: p.id,
+            name: p.full_name,
+            role: p.role,
+            username: ''
+          }));
         setUsers(mappedUsers);
       }
     } catch (err) {
