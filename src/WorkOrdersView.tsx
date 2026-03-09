@@ -27,34 +27,66 @@ const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const fetchData = async () => {
     setLoading(true);
-    const [woRes, uRes] = await Promise.all([
-      supabase.from('ordenes_trabajo').select('*, profiles:assigned_to(full_name)').order('created_at', { ascending: false }),
-      supabase.from('profiles').select('*').order('full_name')
-    ]);
+    try {
+      const [woRes, uRes] = await Promise.all([
+        supabase.from('ordenes_trabajo').select('*, profiles:assigned_to(full_name)').order('created_at', { ascending: false }),
+        supabase.from('profiles').select('id, full_name, role').order('full_name')
+      ]);
 
-    if (!woRes.error) {
-      setWorkOrders(woRes.data.map((wo: any) => ({
-        ...wo,
-        assigned_to_name: wo.profiles?.full_name || 'Sin asignar'
-      })));
+      if (!woRes.error) {
+        setWorkOrders(woRes.data.map((wo: any) => ({
+          ...wo,
+          assigned_to_name: wo.profiles?.full_name || 'Sin asignar'
+        })));
+      }
+      
+      if (!uRes.error) {
+        // Mapeamos para que coincida con la interfaz User si es necesario
+        const mappedUsers = uRes.data.map((p: any) => ({
+          id: p.id,
+          name: p.full_name,
+          role: p.role,
+          username: ''
+        }));
+        setUsers(mappedUsers);
+      }
+    } catch (err) {
+      console.error('Error cargando datos:', err);
+    } finally {
+      setLoading(false);
     }
-    if (!uRes.error) setUsers(uRes.data);
-    setLoading(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
+      // Limpiamos el objeto para enviar solo lo que la DB acepta
+      const dataToSave = {
+        client_name: formData.client_name,
+        description: formData.description,
+        status: formData.status,
+        priority: formData.priority,
+        estimated_end_date: formData.estimated_end_date,
+        assigned_to: formData.assigned_to || null, // Importante: null si está vacío
+        observations: formData.observations,
+        budget_id: formData.budget_id
+      };
+
       if (editingOrder) {
-        await supabase.from('ordenes_trabajo').update(formData).eq('id', editingOrder.id);
+        const { error } = await supabase.from('ordenes_trabajo').update(dataToSave).eq('id', editingOrder.id);
+        if (error) throw error;
       } else {
-        await supabase.from('ordenes_trabajo').insert([formData]);
+        const { error } = await supabase.from('ordenes_trabajo').insert([dataToSave]);
+        if (error) throw error;
       }
+      
+      alert('Orden guardada con éxito');
       setShowForm(false);
-      fetchData();
+      await fetchData();
     } catch (error: any) {
-      alert('Error: ' + error.message);
+      console.error('Error al guardar orden:', error);
+      alert('Error: ' + (error.message || 'No se pudo guardar la orden'));
     } finally {
       setLoading(false);
     }
