@@ -9,6 +9,7 @@ import SupplierManagement from './SupplierManagement'
 import BudgetView from './BudgetView'
 import WorkOrdersView from './WorkOrdersView'
 import UserManagement from './UserManagement'
+import ReportsView from './ReportsView'
 import { supabase } from './lib/supabase'
 import type { User } from './types'
 import { ROLE_LABELS } from './types'
@@ -135,7 +136,7 @@ function App() {
                       <>
                         <Link to="/reports" className="menu-item">
                           <span className="icon">📊</span>
-                          <span>Reportes Gerenciales</span>
+                          <span>Reportes</span>
                         </Link>
                         <Link to="/user-management" className="menu-item">
                           <span className="icon">👥</span>
@@ -185,6 +186,12 @@ function App() {
             </ProtectedRoute>
           } />
 
+          <Route path="/reports" element={
+            <ProtectedRoute allowedRoles={['ADMIN', 'GERENTE']}>
+              <ReportsView onBack={() => navigate('/dashboard')} />
+            </ProtectedRoute>
+          } />
+
           <Route path="/user-management" element={
             <ProtectedRoute allowedRoles={['ADMIN', 'GERENTE']}>
               <UserManagement onBack={() => navigate('/dashboard')} />
@@ -196,7 +203,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>&copy; 2026 Taller Metalúrgico - v1.5.7</p>
+        <p>&copy; 2026 Taller Metalúrgico - v1.6.0</p>
       </footer>
     </div>
   )

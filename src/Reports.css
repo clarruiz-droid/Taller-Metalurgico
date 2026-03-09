@@ -1,0 +1,113 @@
+.reports-container {
+  padding-bottom: 2rem;
+}
+
+.reports-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.report-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1rem;
+  box-shadow: var(--shadow);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.report-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--primary-color);
+}
+
+.card-icon {
+  font-size: 2.5rem;
+  filter: drop-shadow(0 0 10px rgba(0,0,0,0.3));
+}
+
+.card-content h4 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.card-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.card-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Variantes de Color */
+.report-card.alert { border-bottom: 4px solid #f59e0b; }
+.report-card.alert .card-value { color: #f59e0b; }
+
+.report-card.danger { 
+  border-bottom: 4px solid #ef4444;
+  animation: pulse-border 2s infinite;
+}
+.report-card.danger .card-value { color: #ef4444; }
+
+.report-card.primary { border-bottom: 4px solid var(--primary-color); }
+.report-card.primary .card-value { color: var(--primary-color); }
+
+.report-card.warning { border-bottom: 4px solid #facc15; }
+.report-card.warning .card-value { color: #facc15; }
+
+.report-card.info { border-bottom: 4px solid #3b82f6; }
+.report-card.info .card-value { color: #3b82f6; }
+
+.report-card.success { border-bottom: 4px solid #10b981; }
+.report-card.success .card-value { color: #10b981; }
+
+.reports-footer {
+  margin-top: 2.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+@keyframes pulse-border {
+  0% { border-bottom-color: #ef4444; }
+  50% { border-bottom-color: rgba(239, 68, 68, 0.3); }
+  100% { border-bottom-color: #ef4444; }
+}
+
+/* Responsividad */
+@media (max-width: 480px) {
+  .reports-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .report-card {
+    flex-direction: row;
+    text-align: left;
+    padding: 1.25rem;
+    gap: 1.5rem;
+  }
+
+  .card-icon {
+    font-size: 2rem;
+  }
+
+  .card-value {
+    font-size: 1.75rem;
+  }
+}
