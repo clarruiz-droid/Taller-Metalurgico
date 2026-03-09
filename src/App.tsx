@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom'
 import './App.css'
 import Login from './Login'
 import MaterialInventory from './MaterialInventory'
@@ -11,23 +12,20 @@ import { supabase } from './lib/supabase'
 import type { User } from './types'
 import { ROLE_LABELS } from './types'
 
-type AppView = 'DASHBOARD' | 'MATERIAL_INVENTORY' | 'TOOLS' | 'CLIENTS' | 'BUDGETS' | 'WORK_ORDERS' | 'REPORTS' | 'USER_MANAGEMENT';
-
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null)
-  const [activeView, setActiveView] = useState<AppView>('DASHBOARD')
   const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
 
   useEffect(() => {
-    // 1. Verificar si hay sesión activa al cargar
     checkUser();
 
-    // 2. Escuchar cambios en la autenticación
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
         fetchProfile(session.user.id, session.user.email || '');
       } else {
         setCurrentUser(null);
+        navigate('/');
       }
     });
 
@@ -64,87 +62,16 @@ function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
-    setActiveView('DASHBOARD');
+    navigate('/');
   }
 
   if (loading) return <div className="loading-screen">Iniciando sistema...</div>;
 
-  const renderView = () => {
-    if (!currentUser) return <Login onLoginSuccess={() => setActiveView('DASHBOARD')} />;
-
-    switch (activeView) {
-      case 'MATERIAL_INVENTORY':
-        return <MaterialInventory onBack={() => setActiveView('DASHBOARD')} currentUser={currentUser} />;
-      case 'TOOLS':
-        return <ToolInventory onBack={() => setActiveView('DASHBOARD')} currentUser={currentUser} />;
-      case 'CLIENTS':
-        return <ClientManagement onBack={() => setActiveView('DASHBOARD')} />;
-      case 'BUDGETS':
-        return <BudgetView onBack={() => setActiveView('DASHBOARD')} currentUser={currentUser} />;
-      case 'WORK_ORDERS':
-        return <WorkOrdersView onBack={() => setActiveView('DASHBOARD')} />;
-      case 'USER_MANAGEMENT':
-        return <UserManagement onBack={() => setActiveView('DASHBOARD')} />;
-      case 'DASHBOARD':
-      default:
-        return (
-          <div className="dashboard">
-            <header className="dashboard-header">
-              <div className="user-welcome">
-                <h2>Panel de {ROLE_LABELS[currentUser.role]}</h2>
-                <p>Bienvenido, <strong>{currentUser.name}</strong></p>
-              </div>
-              <button className="logout-btn" onClick={handleLogout}>Salir</button>
-            </header>
-
-            <section className="dashboard-content">
-              <div className="role-indicator">
-                Sesión iniciada como: {ROLE_LABELS[currentUser.role]}
-              </div>
-              
-              <div className="menu-grid">
-                <button className="menu-item" onClick={() => setActiveView('MATERIAL_INVENTORY')}>
-                  <span className="icon">📦</span>
-                  <span>Inventario Materiales</span>
-                </button>
-                <button className="menu-item" onClick={() => setActiveView('TOOLS')}>
-                  <span className="icon">🔧</span>
-                  <span>Herramientas</span>
-                </button>
-                {(currentUser.role === 'ADMIN' || currentUser.role === 'GERENTE' || currentUser.role === 'SUPERVISOR') && (
-                  <button className="menu-item" onClick={() => setActiveView('CLIENTS')}>
-                    <span className="icon">🤝</span>
-                    <span>Clientes</span>
-                  </button>
-                )}
-                {(currentUser.role === 'ADMIN' || currentUser.role === 'GERENTE' || currentUser.role === 'SUPERVISOR') && (
-                  <button className="menu-item" onClick={() => setActiveView('BUDGETS')}>
-                    <span className="icon">📄</span>
-                    <span>Presupuestos</span>
-                  </button>
-                )}
-                <button className="menu-item" onClick={() => setActiveView('WORK_ORDERS')}>
-                  <span className="icon">📋</span>
-                  <span>Órdenes de Trabajo</span>
-                </button>
-                {(currentUser.role === 'ADMIN' || currentUser.role === 'GERENTE') && (
-                  <>
-                    <button className="menu-item" onClick={() => setActiveView('REPORTS')}>
-                      <span className="icon">📊</span>
-                      <span>Reportes Gerenciales</span>
-                    </button>
-                    <button className="menu-item" onClick={() => setActiveView('USER_MANAGEMENT')}>
-                      <span className="icon">👥</span>
-                      <span>Gestión de Usuarios</span>
-                    </button>
-                  </>
-                )}
-              </div>
-            </section>
-          </div>
-        );
-    }
-  }
+  const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles?: string[] }) => {
+    if (!currentUser) return <Navigate to="/" replace />;
+    if (allowedRoles && !allowedRoles.includes(currentUser.role)) return <Navigate to="/dashboard" replace />;
+    return children;
+  };
 
   return (
     <div className="app-container">
@@ -153,7 +80,106 @@ function App() {
       </header>
       
       <main className="app-main">
-        {renderView()}
+        <Routes>
+          <Route path="/" element={!currentUser ? <Login onLoginSuccess={() => navigate('/dashboard')} /> : <Navigate to="/dashboard" replace />} />
+          
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <div className="dashboard">
+                <header className="dashboard-header">
+                  <div className="user-welcome">
+                    <h2>Panel de {currentUser ? ROLE_LABELS[currentUser.role] : ''}</h2>
+                    <p>Bienvenido, <strong>{currentUser?.name}</strong></p>
+                  </div>
+                  <button className="logout-btn" onClick={handleLogout}>Salir</button>
+                </header>
+
+                <section className="dashboard-content">
+                  <div className="role-indicator">
+                    Sesión iniciada como: {currentUser ? ROLE_LABELS[currentUser.role] : ''}
+                  </div>
+                  
+                  <div className="menu-grid">
+                    <Link to="/material-inventory" className="menu-item">
+                      <span className="icon">📦</span>
+                      <span>Inventario Materiales</span>
+                    </Link>
+                    <Link to="/tools" className="menu-item">
+                      <span className="icon">🔧</span>
+                      <span>Herramientas</span>
+                    </Link>
+                    {currentUser && ['ADMIN', 'GERENTE', 'SUPERVISOR'].includes(currentUser.role) && (
+                      <Link to="/clients" className="menu-item">
+                        <span className="icon">🤝</span>
+                        <span>Clientes</span>
+                      </Link>
+                    )}
+                    {currentUser && ['ADMIN', 'GERENTE', 'SUPERVISOR'].includes(currentUser.role) && (
+                      <Link to="/budgets" className="menu-item">
+                        <span className="icon">📄</span>
+                        <span>Presupuestos</span>
+                      </Link>
+                    )}
+                    <Link to="/work-orders" className="menu-item">
+                      <span className="icon">📋</span>
+                      <span>Órdenes de Trabajo</span>
+                    </Link>
+                    {currentUser && ['ADMIN', 'GERENTE'].includes(currentUser.role) && (
+                      <>
+                        <Link to="/reports" className="menu-item">
+                          <span className="icon">📊</span>
+                          <span>Reportes Gerenciales</span>
+                        </Link>
+                        <Link to="/user-management" className="menu-item">
+                          <span className="icon">👥</span>
+                          <span>Gestión de Usuarios</span>
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </ProtectedRoute>
+          } />
+
+          <Route path="/material-inventory" element={
+            <ProtectedRoute>
+              <MaterialInventory onBack={() => navigate('/dashboard')} currentUser={currentUser} />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/tools" element={
+            <ProtectedRoute>
+              <ToolInventory onBack={() => navigate('/dashboard')} currentUser={currentUser} />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/clients" element={
+            <ProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'SUPERVISOR']}>
+              <ClientManagement onBack={() => navigate('/dashboard')} />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/budgets" element={
+            <ProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'SUPERVISOR']}>
+              <BudgetView onBack={() => navigate('/dashboard')} currentUser={currentUser} />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/work-orders" element={
+            <ProtectedRoute>
+              <WorkOrdersView onBack={() => navigate('/dashboard')} />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/user-management" element={
+            <ProtectedRoute allowedRoles={['ADMIN', 'GERENTE']}>
+              <UserManagement onBack={() => navigate('/dashboard')} />
+            </ProtectedRoute>
+          } />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
 
       <footer className="app-footer">
