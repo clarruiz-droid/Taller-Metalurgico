@@ -1,125 +1,28 @@
-.work-orders-view {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+.wo-card {
+  position: relative;
+  overflow: hidden;
+  padding-left: 1.5rem !important;
 }
 
-.filter-tabs {
-  display: flex;
-  background: white;
-  padding: 0.25rem;
-  border-radius: var(--border-radius);
-  gap: 0.25rem;
-  box-shadow: var(--shadow);
+.wo-priority-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.2);
 }
 
-.filter-tabs button {
-  flex: 1;
-  background: none;
-  border: none;
-  padding: 0.75rem 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #666;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.filter-tabs button.active {
-  background-color: var(--primary-color);
-  color: white;
-}
-
-.order-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.order-card {
-  background: white;
-  padding: 1.25rem;
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow);
-  border-left: 6px solid #ccc;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.priority-alta { border-left-color: #e74c3c; }
-.priority-media { border-left-color: #f39c12; }
-.priority-baja { border-left-color: #27ae60; }
-
-.order-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.order-id {
-  font-size: 0.75rem;
-  color: #888;
-  font-weight: bold;
-}
-
-.priority-badge {
-  font-size: 0.65rem;
-  font-weight: 800;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background-color: #f0f0f0;
-  color: #444;
-}
-
-.order-desc {
-  font-size: 0.95rem;
-  color: #555;
-  margin-bottom: 0.25rem;
-}
-
-.order-assignment {
-  font-size: 0.85rem;
-  color: #444;
-}
-
-.order-dates {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  color: #777;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #f9f9f9;
-}
-
-.order-status-actions {
-  margin-top: 0.5rem;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 1rem;
-}
-
-.btn-status {
-  flex: 1;
-  padding: 12px;
-  border: none;
-  border-radius: var(--border-radius);
-  color: white;
-  font-weight: bold;
+.wo-desc {
   font-size: 0.9rem;
-  cursor: pointer;
+  color: var(--text-secondary);
+  margin: 0.5rem 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.btn-status.process { background-color: var(--secondary-color); }
-.btn-status.finish { background-color: #27ae60; }
-
-.status-badge-big {
-  text-align: center;
-  font-weight: bold;
-  color: #27ae60;
-  padding: 0.5rem;
-  background-color: #e8f5e9;
-  border-radius: 4px;
-}
+.status-pendiente { background-color: #475569; color: #fff; }
+.status-proceso { background-color: #3b82f6; color: #fff; }
+.status-finalizado { background-color: #10b981; color: #fff; }

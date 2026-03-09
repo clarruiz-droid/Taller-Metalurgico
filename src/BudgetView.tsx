@@ -141,6 +141,30 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     }
   };
 
+  const handleCreateWorkOrder = async (budget: Budget) => {
+    if (!window.confirm('¿Generar Orden de Trabajo para este presupuesto?')) return;
+    
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('ordenes_trabajo').insert([{
+        budget_id: budget.id,
+        client_name: budget.client_name,
+        description: budget.short_description,
+        status: 'PENDIENTE',
+        priority: 'MEDIA',
+        estimated_end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      }]);
+
+      if (error) throw error;
+      alert('Orden de Trabajo generada con éxito');
+      navigate('/work-orders');
+    } catch (error: any) {
+      alert('Error al generar orden: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (!canEditRole) return;
@@ -454,6 +478,17 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
               {isEditing && canEditRole && (
                 <button type="submit" className="btn-primary" disabled={loading}>
                   {editingBudget ? 'Guardar Cambios' : 'Crear Presupuesto'}
+                </button>
+              )}
+
+              {!isEditing && editingBudget?.status === 'APROBADO' && canEditRole && (
+                <button 
+                  type="button" 
+                  className="btn-primary" 
+                  style={{ backgroundColor: 'var(--secondary-color)', boxShadow: '0 4px 12px rgba(230, 126, 34, 0.3)' }}
+                  onClick={() => handleCreateWorkOrder(editingBudget)}
+                >
+                  ⚙️ Generar Orden de Trabajo
                 </button>
               )}
             </div>

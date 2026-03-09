@@ -1,95 +1,160 @@
 import React, { useState, useEffect } from 'react';
-import type { WorkOrder, WorkOrderStatus } from './types';
+import type { WorkOrder, User } from './types';
 import { supabase } from './lib/supabase';
+import { WORK_ORDER_STATUS_LABELS, WORK_ORDER_PRIORITY_LABELS } from './types';
 import './WorkOrders.css';
 
 const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const [orders, setOrders] = useState<WorkOrder[]>([]);
-  const [filter, setFilter] = useState<WorkOrderStatus | 'ALL'>('ALL');
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
+
+  const [formData, setFormData] = useState<Partial<WorkOrder>>({
+    client_name: '',
+    description: '',
+    status: 'PENDIENTE',
+    priority: 'MEDIA',
+    estimated_end_date: '',
+    assigned_to: '',
+    observations: ''
+  });
 
   useEffect(() => {
-    fetchOrders();
+    fetchData();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchData = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('ordenes_trabajo')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const [woRes, uRes] = await Promise.all([
+      supabase.from('ordenes_trabajo').select('*, profiles:assigned_to(full_name)').order('created_at', { ascending: false }),
+      supabase.from('profiles').select('*').order('full_name')
+    ]);
 
-    if (error) {
-      console.error('Error cargando órdenes:', error);
-    } else {
-      setOrders(data || []);
+    if (!woRes.error) {
+      setWorkOrders(woRes.data.map((wo: any) => ({
+        ...wo,
+        assigned_to_name: wo.profiles?.full_name || 'Sin asignar'
+      })));
     }
+    if (!uRes.error) setUsers(uRes.data);
     setLoading(false);
   };
 
-  const updateStatus = async (id: string, newStatus: WorkOrderStatus) => {
-    const { error } = await supabase
-      .from('ordenes_trabajo')
-      .update({ status: newStatus })
-      .eq('id', id);
-
-    if (error) {
-      alert('Error al actualizar estado');
-    } else {
-      fetchOrders(); // Recargar datos
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (editingOrder) {
+        await supabase.from('ordenes_trabajo').update(formData).eq('id', editingOrder.id);
+      } else {
+        await supabase.from('ordenes_trabajo').insert([formData]);
+      }
+      setShowForm(false);
+      fetchData();
+    } catch (error: any) {
+      alert('Error: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const filteredOrders = filter === 'ALL' 
-    ? orders 
-    : orders.filter(o => o.status === filter);
+  const openEdit = (wo: WorkOrder) => {
+    setEditingOrder(wo);
+    setFormData(wo);
+    setShowForm(true);
+  };
+
+  const getPriorityColor = (p: string) => {
+    switch(p) {
+      case 'ALTA': return '#ef4444';
+      case 'MEDIA': return '#f59e0b';
+      case 'BAJA': return '#3498db';
+      default: return 'var(--text-secondary)';
+    }
+  };
 
   return (
-    <div className="work-orders-view">
+    <div className="inventory-view">
       <header className="view-header">
-        <button className="btn-back" onClick={onBack}>← Volver</button>
-        <h3>Órdenes de Trabajo (Nube)</h3>
+        <button className="btn-back" onClick={showForm ? () => setShowForm(false) : onBack}>← Volver</button>
+        <h3>{showForm ? 'Editar Orden de Trabajo' : 'Órdenes de Trabajo'}</h3>
       </header>
 
-      <div className="filter-tabs">
-        <button className={filter === 'ALL' ? 'active' : ''} onClick={() => setFilter('ALL')}>Todas</button>
-        <button className={filter === 'PENDIENTE' ? 'active' : ''} onClick={() => setFilter('PENDIENTE')}>Pendientes</button>
-        <button className={filter === 'PROCESO' ? 'active' : ''} onClick={() => setFilter('PROCESO')}>Proceso</button>
-        <button className={filter === 'FINALIZADO' ? 'active' : ''} onClick={() => setFilter('FINALIZADO')}>Listo</button>
-      </div>
-
-      {loading ? <div className="loading-state">Cargando...</div> : (
-        <div className="order-list">
-          {filteredOrders.length === 0 ? <p className="empty-msg">No hay órdenes en este estado.</p> : (
-            filteredOrders.map(order => (
-              <div key={order.id} className={`order-card priority-${order.priority.toLowerCase()}`}>
-                <div className="order-card-header">
-                  <span className="order-id"># {order.id.slice(0, 8)}</span>
-                  <span className={`priority-badge`}>{order.priority}</span>
+      {!showForm ? (
+        <div className="material-list">
+          {workOrders.length === 0 && !loading && <p className="empty-msg">No hay órdenes de trabajo activas.</p>}
+          {workOrders.map(wo => (
+            <div key={wo.id} className="material-card wo-card clickable" onClick={() => openEdit(wo)}>
+              <div className="wo-priority-indicator" style={{ backgroundColor: getPriorityColor(wo.priority) }}></div>
+              <div className="material-info">
+                <div className="tool-header">
+                  <h4>{wo.client_name}</h4>
+                  <span className={`status-badge status-${wo.status.toLowerCase()}`}>
+                    {WORK_ORDER_STATUS_LABELS[wo.status]}
+                  </span>
                 </div>
-                <h4>{order.client_name}</h4>
-                <p className="order-desc">{order.description}</p>
-                <div className="order-dates">
-                  <span>📅 {order.start_date}</span>
-                  <span>🏁 Est. {order.estimated_end_date || 'Sin definir'}</span>
-                </div>
-                
-                <div className="order-status-actions">
-                  {order.status !== 'FINALIZADO' && (
-                    <div className="action-buttons">
-                      {order.status === 'PENDIENTE' && (
-                        <button className="btn-status process" onClick={() => updateStatus(order.id, 'PROCESO')}>Comenzar</button>
-                      )}
-                      {order.status === 'PROCESO' && (
-                        <button className="btn-status finish" onClick={() => updateStatus(order.id, 'FINALIZADO')}>Finalizar</button>
-                      )}
-                    </div>
-                  )}
-                  {order.status === 'FINALIZADO' && <div className="status-badge-big">✅ TRABAJO TERMINADO</div>}
+                <p className="wo-desc">{wo.description}</p>
+                <div className="budget-meta-list">
+                  <span className="meta-tag">👤 {wo.assigned_to_name}</span>
+                  <span className="meta-tag">📅 Entrega: {new Date(wo.estimated_end_date).toLocaleDateString()}</span>
                 </div>
               </div>
-            ))
-          )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="material-form-container">
+          <form className="material-form" onSubmit={handleSave}>
+            <div className="form-group">
+              <label>Cliente</label>
+              <input type="text" value={formData.client_name} onChange={e => setFormData({...formData, client_name: e.target.value})} required className="form-input" />
+            </div>
+            <div className="form-group">
+              <label>Descripción del Trabajo</label>
+              <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required className="form-input" rows={3} />
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Prioridad</label>
+                <select value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})} className="form-input">
+                  <option value="BAJA">Baja</option>
+                  <option value="MEDIA">Media</option>
+                  <option value="ALTA">Alta</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Estado</label>
+                <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="form-input">
+                  <option value="PENDIENTE">Pendiente</option>
+                  <option value="PROCESO">En Proceso</option>
+                  <option value="FINALIZADO">Finalizado</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Asignar a</label>
+                <select value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})} className="form-input">
+                  <option value="">Sin asignar</option>
+                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Fecha Estimada Entrega</label>
+                <input type="date" value={formData.estimated_end_date} onChange={e => setFormData({...formData, estimated_end_date: e.target.value})} required className="form-input" />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Observaciones / Notas</label>
+              <textarea value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} className="form-input" rows={2} />
+            </div>
+            <div className="form-actions">
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
+              <button type="submit" className="btn-primary" disabled={loading}>Guardar Orden</button>
+            </div>
+          </form>
         </div>
       )}
     </div>

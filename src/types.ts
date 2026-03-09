@@ -88,21 +88,30 @@ export interface Budget {
 }
 
 export type WorkOrderStatus = 'PENDIENTE' | 'PROCESO' | 'FINALIZADO';
+export type WorkOrderPriority = 'BAJA' | 'MEDIA' | 'ALTA';
 
 export interface WorkOrder {
   id: string;
-  budget_id?: string;
+  budget_id?: number;
   client_name: string;
   description: string;
   assigned_to?: string;
+  assigned_to_name?: string;
   start_date: string;
   estimated_end_date: string;
   status: WorkOrderStatus;
-  priority: 'BAJA' | 'MEDIA' | 'ALTA';
+  priority: WorkOrderPriority;
+  observations?: string;
 }
 
 export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   PENDIENTE: 'Pendiente',
   PROCESO: 'En Proceso',
   FINALIZADO: 'Finalizado'
+};
+
+export const WORK_ORDER_PRIORITY_LABELS: Record<WorkOrderPriority, string> = {
+  BAJA: 'Baja',
+  MEDIA: 'Media',
+  ALTA: 'Alta'
 };
