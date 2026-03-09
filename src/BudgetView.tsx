@@ -149,7 +149,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     setLoading(true);
     try {
       const { error } = await supabase.from('ordenes_trabajo').insert([{
-        budget_id: budget.id,
+        budget_id: Number(budget.id),
         client_name: budget.client_name,
         description: budget.short_description,
         status: 'PENDIENTE',
