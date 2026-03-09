@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { WorkOrder, User } from './types';
 import { supabase } from './lib/supabase';
-import { WORK_ORDER_STATUS_LABELS, WORK_ORDER_PRIORITY_LABELS } from './types';
+import { WORK_ORDER_STATUS_LABELS } from './types';
 import './WorkOrders.css';
 
 const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {

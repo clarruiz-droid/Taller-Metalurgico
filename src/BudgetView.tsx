@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Budget, Client, Material, Tool, User } from './types';
 import { supabase } from './lib/supabase';
 import './Budgets.css';
@@ -9,6 +10,7 @@ interface BudgetViewProps {
 }
 
 const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
+  const navigate = useNavigate();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
