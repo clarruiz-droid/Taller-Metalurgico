@@ -7,6 +7,7 @@ import './WorkOrders.css';
 const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
@@ -109,6 +110,11 @@ const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
   };
 
+  const filteredOrders = workOrders.filter(wo => 
+    wo.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    wo.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="inventory-view">
       <header className="view-header">
@@ -117,10 +123,22 @@ const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </header>
 
       {!showForm ? (
-        <div className="material-list">
-          {workOrders.length === 0 && !loading && <p className="empty-msg">No hay órdenes de trabajo activas.</p>}
-          {workOrders.map(wo => (
-            <div key={wo.id} className="material-card wo-card clickable" onClick={() => openEdit(wo)}>
+        <>
+          {/* Barra de Búsqueda */}
+          <div className="search-bar">
+            <input 
+              type="text" 
+              placeholder="🔍 Buscar por cliente o trabajo..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="form-input"
+            />
+          </div>
+
+          <div className="material-list">
+            {filteredOrders.length === 0 && !loading && <p className="empty-msg">No hay órdenes que coincidan con la búsqueda.</p>}
+            {filteredOrders.map(wo => (
+              <div key={wo.id} className="material-card wo-card clickable" onClick={() => openEdit(wo)}>
               <div className="wo-priority-indicator" style={{ backgroundColor: getPriorityColor(wo.priority) }}></div>
               <div className="material-info">
                 <div className="tool-header">

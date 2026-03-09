@@ -24,6 +24,7 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
   // Estados de búsqueda y filtro
   const [materialSearch, setMaterialSearch] = useState('');
   const [toolSearch, setToolSearch] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | Budget['status']>('ALL');
 
   const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPERVISOR';
@@ -231,9 +232,11 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
   const currentClient = clients.find(c => c.id === formData.client_id);
 
-  const filteredBudgets = statusFilter === 'ALL' 
-    ? budgets 
-    : budgets.filter(b => b.status === statusFilter);
+  const filteredBudgets = budgets.filter(b => {
+    const matchesStatus = statusFilter === 'ALL' || b.status === statusFilter;
+    const matchesClient = b.client_name.toLowerCase().includes(clientSearch.toLowerCase());
+    return matchesStatus && matchesClient;
+  });
 
   return (
     <div className="inventory-view budget-view-main">
@@ -244,6 +247,17 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
       {!showForm ? (
         <>
+          {/* Barra de Búsqueda */}
+          <div className="search-bar">
+            <input 
+              type="text" 
+              placeholder="🔍 Buscar por cliente..." 
+              value={clientSearch}
+              onChange={(e) => setClientSearch(e.target.value)}
+              className="form-input"
+            />
+          </div>
+
           {/* Filtros de Estado */}
           <div className="filter-tabs budget-filters">
             <button className={statusFilter === 'ALL' ? 'active' : ''} onClick={() => setStatusFilter('ALL')}>Todos</button>
