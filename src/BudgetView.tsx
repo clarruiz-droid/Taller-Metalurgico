@@ -149,19 +149,23 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     setLoading(true);
     try {
       const { error } = await supabase.from('ordenes_trabajo').insert([{
-        budget_id: Number(budget.id),
+        budget_id: budget.id,
         client_name: budget.client_name,
         description: budget.short_description,
         status: 'PENDIENTE',
         priority: 'MEDIA',
+        assigned_to: null, // Aseguramos que sea null explícito para evitar errores de tipo UUID
         estimated_end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
       }]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error detallado de Supabase:', error);
+        throw error;
+      }
       alert('Orden de Trabajo generada con éxito');
       navigate('/work-orders');
     } catch (error: any) {
-      alert('Error al generar orden: ' + error.message);
+      alert('Error al generar orden: ' + (error.message || 'Error desconocido'));
     } finally {
       setLoading(false);
     }
