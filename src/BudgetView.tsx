@@ -148,15 +148,18 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
     
     setLoading(true);
     try {
-      const { error } = await supabase.from('ordenes_trabajo').insert([{
-        budget_id: budget.id,
-        client_name: budget.client_name,
+      // Limpiamos los datos para evitar errores de tipo UUID en Postgres
+      const orderToCreate = {
+        budget_id: parseInt(String(budget.id), 10), // Forzamos entero
+        client_name: budget.client_name || 'Sin Cliente',
         description: budget.short_description,
         status: 'PENDIENTE',
         priority: 'MEDIA',
-        assigned_to: null, // Aseguramos que sea null explícito para evitar errores de tipo UUID
+        assigned_to: null, // Null explícito, nunca cadena vacía
         estimated_end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      }]);
+      };
+
+      const { error } = await supabase.from('ordenes_trabajo').insert([orderToCreate]);
 
       if (error) {
         console.error('Error detallado de Supabase:', error);
