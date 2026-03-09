@@ -46,50 +46,96 @@ const BudgetView: React.FC<BudgetViewProps> = ({ onBack, currentUser }) => {
 
   const fetchData = async () => {
     setLoading(true);
-    const [bRes, cRes, mRes, tRes] = await Promise.all([
-      supabase.from('presupuestos').select('*, clientes(name), profiles:created_by(full_name)').order('created_at', { ascending: false }),
-      supabase.from('clientes').select('*').order('name'),
-      supabase.from('materiales').select('*').order('description'),
-      supabase.from('herramientas').select('*').order('description')
-    ]);
+    try {
+      const [bRes, cRes, mRes, tRes] = await Promise.all([
+        supabase.from('presupuestos').select('*, clientes(name), profiles:created_by(full_name)').order('created_at', { ascending: false }),
+        supabase.from('clientes').select('*').order('name'),
+        supabase.from('materiales').select('*').order('description'),
+        supabase.from('herramientas').select('*').order('description')
+      ]);
 
-    if (!bRes.error) {
-      setBudgets(bRes.data.map((b: any) => ({ 
-        ...b, 
-        client_name: b.clientes?.name,
-        creator_name: b.profiles?.full_name || 'Desconocido'
-      })) || []);
+      if (bRes.error) {
+        console.error('Error cargando presupuestos:', bRes.error);
+        // Si el join con profiles falla, intentamos cargar solo los presupuestos sin el join de perfil
+        const simpleBRes = await supabase.from('presupuestos').select('*, clientes(name)').order('created_at', { ascending: false });
+        if (!simpleBRes.error) {
+          setBudgets(simpleBRes.data.map((b: any) => ({ 
+            ...b, 
+            client_name: b.clientes?.name,
+            creator_name: 'Desconocido'
+          })) || []);
+        } else {
+          throw simpleBRes.error;
+        }
+      } else {
+        setBudgets(bRes.data.map((b: any) => ({ 
+          ...b, 
+          client_name: b.clientes?.name,
+          creator_name: b.profiles?.full_name || 'Desconocido'
+        })) || []);
+      }
+
+      if (!cRes.error) setClients(cRes.data || []);
+      if (!mRes.error) setMaterials(mRes.data || []);
+      if (!tRes.error) setTools(tRes.data || []);
+      
+    } catch (err: any) {
+      console.error('Error completo en fetchData:', err);
+      alert('Error al cargar datos: ' + err.message);
+    } finally {
+      setLoading(false);
     }
-    if (!cRes.error) setClients(cRes.data || []);
-    if (!mRes.error) setMaterials(mRes.data || []);
-    if (!tRes.error) setTools(tRes.data || []);
-    setLoading(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canEditRole || !isEditing) return;
+    if (!canEditRole) {
+      alert('No tienes permisos para realizar esta acción');
+      return;
+    }
     
     setLoading(true);
     try {
+      // Limpiar los datos para asegurar que no enviamos campos extraños
+      const dataToSave = {
+        client_id: formData.client_id,
+        validity_days: formData.validity_days,
+        short_description: formData.short_description,
+        long_description: formData.long_description,
+        estimated_value: formData.estimated_value,
+        status: formData.status,
+        images: formData.images,
+        materials: formData.materials,
+        tools: formData.tools,
+        created_by: currentUser?.id // Asegurar que usamos el ID del usuario actual
+      };
+
       if (editingBudget) {
         const { error } = await supabase
           .from('presupuestos')
-          .update(formData)
+          .update(dataToSave)
           .eq('id', editingBudget.id);
+        
         if (error) throw error;
         alert('Presupuesto actualizado con éxito');
       } else {
-        const { error } = await supabase
+        const { error, data } = await supabase
           .from('presupuestos')
-          .insert([{ ...formData, created_by: currentUser?.id }]);
-        if (error) throw error;
+          .insert([dataToSave])
+          .select();
+        
+        if (error) {
+          console.error('Error de Supabase:', error);
+          throw new Error(error.message || 'Error desconocido al insertar');
+        }
+        console.log('Presupuesto creado:', data);
         alert('Presupuesto creado con éxito');
       }
       closeForm();
-      fetchData();
+      await fetchData();
     } catch (error: any) {
-      alert('Error: ' + error.message);
+      console.error('Error completo:', error);
+      alert('Error al guardar: ' + (error.message || 'Error desconocido'));
     } finally {
       setLoading(false);
     }
