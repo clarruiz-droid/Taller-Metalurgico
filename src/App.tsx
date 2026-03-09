@@ -67,7 +67,7 @@ function App() {
 
   if (loading) return <div className="loading-screen">Iniciando sistema...</div>;
 
-  const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles?: string[] }) => {
+  const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles?: string[] }) => {
     if (!currentUser) return <Navigate to="/" replace />;
     if (allowedRoles && !allowedRoles.includes(currentUser.role)) return <Navigate to="/dashboard" replace />;
     return children;
