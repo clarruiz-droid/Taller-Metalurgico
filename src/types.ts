@@ -32,6 +32,16 @@ export interface Client {
   cuit_dni?: string;
 }
 
+export interface Supplier {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  cuit_dni?: string;
+  rubro?: string;
+}
+
 export type ToolStatus = 'OPERATIVA' | 'REPARACION' | 'EXTRAVIADA';
 
 export interface Tool {
