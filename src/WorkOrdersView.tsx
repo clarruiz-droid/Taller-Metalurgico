@@ -100,8 +100,6 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
         budget_id: formData.budget_id
       };
 
-      let orderId = editingOrder?.id;
-
       if (editingOrder) {
         const { error } = await supabase.from('ordenes_trabajo').update(dataToSave).eq('id', editingOrder.id);
         if (error) throw error;
@@ -116,7 +114,6 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
       } else {
         const { data, error } = await supabase.from('ordenes_trabajo').insert([dataToSave]).select().single();
         if (error) throw error;
-        orderId = data.id;
         await logChange(data.id, 'CREACION', 'Orden de trabajo iniciada');
       }
       
