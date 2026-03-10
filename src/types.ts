@@ -104,6 +104,16 @@ export interface WorkOrder {
   observations?: string;
 }
 
+export interface WorkOrderHistory {
+  id: string;
+  order_id: string;
+  user_id: string;
+  user_name: string;
+  action: 'CREACION' | 'MODIFICACION' | 'CAMBIO_ESTADO';
+  details: string;
+  created_at: string;
+}
+
 export const WORK_ORDER_STATUS_LABELS: Record<WorkOrderStatus, string> = {
   PENDIENTE: 'Pendiente',
   PROCESO: 'En Proceso',

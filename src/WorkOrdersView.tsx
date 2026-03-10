@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import type { WorkOrder, User } from './types';
+import type { WorkOrder, User, WorkOrderHistory } from './types';
 import { supabase } from './lib/supabase';
 import { WORK_ORDER_STATUS_LABELS } from './types';
 import './WorkOrders.css';
 
-const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+interface WorkOrdersViewProps {
+  onBack: () => void;
+  currentUser: User | null;
+}
+
+const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) => {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [history, setHistory] = useState<WorkOrderHistory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -42,7 +48,6 @@ const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       }
       
       if (!uRes.error) {
-        // Filtramos solo Operarios y Supervisores y mapeamos a la interfaz User
         const mappedUsers = uRes.data
           .filter((p: any) => p.role === 'OPERARIO' || p.role === 'SUPERVISOR')
           .map((p: any) => ({
@@ -60,28 +65,59 @@ const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
   };
 
+  const fetchHistory = async (orderId: string) => {
+    const { data, error } = await supabase
+      .from('historial_ordenes')
+      .select('*')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: false });
+    
+    if (!error) setHistory(data || []);
+  };
+
+  const logChange = async (orderId: string, action: string, details: string) => {
+    await supabase.from('historial_ordenes').insert([{
+      order_id: orderId,
+      user_id: currentUser?.id,
+      user_name: currentUser?.name || 'Sistema',
+      action,
+      details
+    }]);
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Limpiamos el objeto para enviar solo lo que la DB acepta
       const dataToSave = {
         client_name: formData.client_name,
         description: formData.description,
         status: formData.status,
         priority: formData.priority,
         estimated_end_date: formData.estimated_end_date,
-        assigned_to: formData.assigned_to || null, // Importante: null si está vacío
+        assigned_to: formData.assigned_to || null,
         observations: formData.observations,
         budget_id: formData.budget_id
       };
 
+      let orderId = editingOrder?.id;
+
       if (editingOrder) {
         const { error } = await supabase.from('ordenes_trabajo').update(dataToSave).eq('id', editingOrder.id);
         if (error) throw error;
+        
+        // Detectar qué cambió para el historial
+        let changes = [];
+        if (editingOrder.status !== formData.status) changes.push(`Estado: ${editingOrder.status} -> ${formData.status}`);
+        if (editingOrder.assigned_to !== formData.assigned_to) changes.push(`Reasignación de personal`);
+        if (editingOrder.priority !== formData.priority) changes.push(`Prioridad: ${editingOrder.priority} -> ${formData.priority}`);
+        
+        await logChange(editingOrder.id, 'MODIFICACION', changes.join(', ') || 'Actualización de datos generales');
       } else {
-        const { error } = await supabase.from('ordenes_trabajo').insert([dataToSave]);
+        const { data, error } = await supabase.from('ordenes_trabajo').insert([dataToSave]).select().single();
         if (error) throw error;
+        orderId = data.id;
+        await logChange(data.id, 'CREACION', 'Orden de trabajo iniciada');
       }
       
       alert('Orden guardada con éxito');
@@ -98,6 +134,7 @@ const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const openEdit = (wo: WorkOrder) => {
     setEditingOrder(wo);
     setFormData(wo);
+    fetchHistory(wo.id);
     setShowForm(true);
   };
 
@@ -111,20 +148,19 @@ const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   const filteredOrders = workOrders.filter(wo => 
-    wo.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    wo.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (wo.client_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (wo.description?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="inventory-view">
       <header className="view-header">
         <button className="btn-back" onClick={showForm ? () => setShowForm(false) : onBack}>← Volver</button>
-        <h3>{showForm ? 'Editar Orden de Trabajo' : 'Órdenes de Trabajo'}</h3>
+        <h3>{showForm ? 'Detalle de Orden' : 'Órdenes de Trabajo'}</h3>
       </header>
 
       {!showForm ? (
         <>
-          {/* Barra de Búsqueda */}
           <div className="search-bar">
             <input 
               type="text" 
@@ -203,11 +239,36 @@ const WorkOrdersView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <label>Observaciones / Notas</label>
               <textarea value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} className="form-input" rows={2} />
             </div>
+            
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
-              <button type="submit" className="btn-primary" disabled={loading}>Guardar Orden</button>
+              <button type="submit" className="btn-primary" disabled={loading}>Guardar Cambios</button>
             </div>
           </form>
+
+          {/* SECCIÓN DE HISTORIAL */}
+          <div className="history-section">
+            <h4>📜 Historial de Cambios</h4>
+            <div className="history-timeline">
+              {history.length === 0 ? (
+                <p className="empty-msg">No hay registros de cambios aún.</p>
+              ) : (
+                history.map(log => (
+                  <div key={log.id} className="history-item">
+                    <div className="history-dot"></div>
+                    <div className="history-content">
+                      <div className="history-header">
+                        <strong>{log.user_name}</strong>
+                        <span className="history-time">{new Date(log.created_at).toLocaleString()}</span>
+                      </div>
+                      <div className="history-action-badge">{log.action}</div>
+                      <p className="history-details">{log.details}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
