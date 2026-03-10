@@ -104,13 +104,39 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
         const { error } = await supabase.from('ordenes_trabajo').update(dataToSave).eq('id', editingOrder.id);
         if (error) throw error;
         
-        // Detectar qué cambió para el historial
-        let changes = [];
-        if (editingOrder.status !== formData.status) changes.push(`Estado: ${editingOrder.status} -> ${formData.status}`);
-        if (editingOrder.assigned_to !== formData.assigned_to) changes.push(`Reasignación de personal`);
-        if (editingOrder.priority !== formData.priority) changes.push(`Prioridad: ${editingOrder.priority} -> ${formData.priority}`);
+        // Detectar cambios detallados para el historial
+        const changes: string[] = [];
+        const fieldLabels: Record<string, string> = {
+          status: 'Estado',
+          priority: 'Prioridad',
+          assigned_to: 'Asignación',
+          client_name: 'Cliente',
+          description: 'Descripción',
+          estimated_end_date: 'Fecha Entrega',
+          observations: 'Observaciones'
+        };
+
+        (Object.keys(dataToSave) as Array<keyof typeof dataToSave>).forEach(key => {
+          const oldVal = editingOrder[key as keyof WorkOrder];
+          const newVal = dataToSave[key];
+
+          if (oldVal !== newVal) {
+            const label = fieldLabels[key] || key;
+            
+            // Formateo especial para asignación (nombres en lugar de IDs)
+            if (key === 'assigned_to') {
+              const oldUser = users.find(u => u.id === oldVal)?.name || 'Sin asignar';
+              const newUser = users.find(u => u.id === newVal)?.name || 'Sin asignar';
+              changes.push(`${label}: [${oldUser}] ➔ [${newUser}]`);
+            } else {
+              changes.push(`${label}: [${oldVal || 'Vacío'}] ➔ [${newVal || 'Vacío'}]`);
+            }
+          }
+        });
         
-        await logChange(editingOrder.id, 'MODIFICACION', changes.join(', ') || 'Actualización de datos generales');
+        if (changes.length > 0) {
+          await logChange(editingOrder.id, 'MODIFICACION', changes.join(' | '));
+        }
       } else {
         const { data, error } = await supabase.from('ordenes_trabajo').insert([dataToSave]).select().single();
         if (error) throw error;
