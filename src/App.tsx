@@ -163,9 +163,33 @@ function App() {
             </ProtectedRoute>
           } />
           
+          <Route path="/material-inventory/edit/:id" element={
+            <ProtectedRoute>
+              <MaterialInventory onBack={() => navigate('/material-inventory')} currentUser={currentUser} />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/material-inventory/new" element={
+            <ProtectedRoute>
+              <MaterialInventory onBack={() => navigate('/material-inventory')} currentUser={currentUser} />
+            </ProtectedRoute>
+          } />
+          
           <Route path="/tools" element={
             <ProtectedRoute>
               <ToolInventory onBack={() => navigate('/dashboard')} currentUser={currentUser} />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/tools/edit/:id" element={
+            <ProtectedRoute>
+              <ToolInventory onBack={() => navigate('/tools')} currentUser={currentUser} />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/tools/new" element={
+            <ProtectedRoute>
+              <ToolInventory onBack={() => navigate('/tools')} currentUser={currentUser} />
             </ProtectedRoute>
           } />
 
@@ -222,7 +246,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>&copy; 2026 Taller Metalúrgico - v1.10.5</p>
+        <p>&copy; 2026 Taller Metalúrgico - v1.11.0</p>
       </footer>
     </div>
   )
