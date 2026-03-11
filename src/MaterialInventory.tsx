@@ -13,7 +13,8 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'IDLE' | 'PROCESSING' | 'UPLOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'GERENTE' || currentUser?.role === 'SUPERVISOR';
 
@@ -32,23 +33,17 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
   const init = async () => {
     setLoading(true);
     await fetchMaterials();
-    
     if (routeId) {
       const { data } = await supabase.from('materiales').select('*').eq('id', routeId).single();
-      if (data) {
-        setEditingMaterial(data);
-        setFormData(data);
-      }
+      if (data) { setEditingMaterial(data); setFormData(data); }
     } else if (isNew) {
       setEditingMaterial(null);
-      // Intentar recuperar borrador de localStorage si existe
       const draft = localStorage.getItem('draft_material');
       if (draft) setFormData(JSON.parse(draft));
     }
     setLoading(false);
   };
 
-  // Guardar borrador en cada cambio de formulario
   useEffect(() => {
     if (isNew || routeId) {
       localStorage.setItem('draft_material', JSON.stringify(formData));
@@ -62,58 +57,84 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
 
   const resizeImage = (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 600;
-        let width = img.width;
-        let height = img.height;
-        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob((blob) => { if (blob) resolve(blob); else reject(new Error('Error al procesar')); }, 'image/webp', 0.8);
-        }
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800;
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob((blob) => {
+              if (blob) resolve(blob);
+              else reject(new Error('Error en canvas'));
+            }, 'image/jpeg', 0.7);
+          }
+        };
+        img.onerror = () => reject(new Error('Error cargando imagen'));
       };
-      img.onerror = reject;
+      reader.onerror = () => reject(new Error('Error leyendo archivo'));
     });
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
     try {
-      setUploading(true);
-      if (!event.target.files || event.target.files.length === 0) return;
+      setUploadStatus('PROCESSING');
+      setErrorMessage('');
+      
+      let dataToUpload: Blob | File = file;
+      let extension = file.name.split('.').pop() || 'jpg';
 
-      const file = event.target.files[0];
-      console.log('Iniciando procesamiento de imagen:', file.name);
+      // Intentar redimensionar para ahorrar datos y evitar fallos de memoria
+      try {
+        const resized = await resizeImage(file);
+        dataToUpload = resized;
+        extension = 'jpg';
+      } catch (e) {
+        console.warn('Redimensionamiento fallido, subiendo original:', e);
+        dataToUpload = file;
+      }
 
-      // REDIMENSIONAR IMAGEN (Crítico para fotos de cámara de alta resolución)
-      const resizedBlob = await resizeImage(file);
-      const fileName = `mat-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
+      setUploadStatus('UPLOADING');
+      const fileName = `m-${Date.now()}.${extension}`;
 
       const { error: uploadError } = await supabase.storage
         .from('materiales')
-        .upload(fileName, resizedBlob, { contentType: 'image/webp' });
+        .upload(fileName, dataToUpload, { 
+          contentType: extension === 'jpg' ? 'image/jpeg' : file.type,
+          cacheControl: '3600'
+        });
 
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from('materiales').getPublicUrl(fileName);
-
+      
+      const newUrl = data.publicUrl;
       setFormData(prev => {
-        const newState = { ...prev, image_url: data.publicUrl };
-        // Guardamos el borrador con la nueva imagen inmediatamente
+        const newState = { ...prev, image_url: newUrl };
         localStorage.setItem('draft_material', JSON.stringify(newState));
         return newState;
       });
       
-      console.log('Imagen vinculada al formulario:', data.publicUrl);
+      setUploadStatus('SUCCESS');
+      setTimeout(() => setUploadStatus('IDLE'), 3000);
+
     } catch (error: any) {
-      console.error('Error en subida:', error);
-      alert('Error al subir imagen: ' + error.message);
+      console.error('Error subiendo:', error);
+      setUploadStatus('ERROR');
+      setErrorMessage(error.message);
     } finally {
-      setUploading(false);
+      event.target.value = '';
     }
   };
 
@@ -133,12 +154,6 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('¿Eliminar este material?')) return;
-    await supabase.from('materiales').delete().eq('id', id);
-    fetchMaterials();
   };
 
   const filteredMaterials = materials.filter(m => m.description.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -165,7 +180,7 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
                     <span className={`stock-badge ${Number(material.quantity) <= Number(material.min_stock) ? 'low-stock' : 'ok-stock'}`}>{material.quantity} {material.unit}</span>
                   </div>
                 </div>
-                <div className="material-actions">{canEditRole && (<><button className="btn-action" onClick={() => navigate(`/material-inventory/edit/${material.id}`)}>✎</button><button className="btn-action btn-delete" onClick={() => handleDelete(material.id)}>🗑</button></>)}</div>
+                <div className="material-actions">{canEditRole && (<><button className="btn-action" onClick={() => navigate(`/material-inventory/edit/${material.id}`)}>✎</button></>)}</div>
               </div>
             ))}
           </div>
@@ -177,10 +192,34 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
           <form className="material-form" onSubmit={handleSave}>
             <div className="form-group image-upload-section">
               <label>Imagen del Material</label>
-              <div className="preview-container">{formData.image_url ? <img src={formData.image_url} alt="Vista previa" className="form-image-preview" /> : <div className="no-image">Sin imagen seleccionada</div>}</div>
-              <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} disabled={uploading} className="file-input" />
-              {uploading && <p className="uploading-text">Optimizando y subiendo...</p>}
+              <div className="preview-container">
+                {formData.image_url ? (
+                  <img src={formData.image_url} alt="Vista previa" className="form-image-preview" />
+                ) : (
+                  <div className="no-image">
+                    {uploadStatus === 'PROCESSING' ? '📸 Procesando...' : 
+                     uploadStatus === 'UPLOADING' ? '☁️ Subiendo...' : 
+                     'Sin imagen seleccionada'}
+                  </div>
+                )}
+              </div>
+              
+              <div className="upload-controls">
+                <input 
+                  type="file" accept="image/*" capture="environment" 
+                  onChange={handleFileUpload} 
+                  disabled={uploadStatus === 'PROCESSING' || uploadStatus === 'UPLOADING'} 
+                  id="camera-input" style={{ display: 'none' }}
+                />
+                <label htmlFor="camera-input" className="btn-primary" style={{ backgroundColor: 'var(--secondary-color)', marginBottom: '1rem' }}>
+                  {uploadStatus === 'PROCESSING' || uploadStatus === 'UPLOADING' ? 'Cargando...' : '📷 Tomar Foto / Galería'}
+                </label>
+              </div>
+
+              {uploadStatus === 'SUCCESS' && <p style={{ color: '#10b981', fontSize: '0.8rem', textAlign: 'center' }}>✅ Imagen cargada correctamente</p>}
+              {uploadStatus === 'ERROR' && <p style={{ color: '#ef4444', fontSize: '0.8rem', textAlign: 'center' }}>❌ Error: {errorMessage}</p>}
             </div>
+
             <div className="form-group">
               <label>Descripción</label>
               <input type="text" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Ej: Perfil C 100x50" required className="form-input" />
@@ -203,7 +242,9 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
             </div>
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={() => navigate('/material-inventory')}>Cancelar</button>
-              <button type="submit" className="btn-primary" disabled={loading || uploading}>{loading ? 'Guardando...' : 'Guardar Cambios'}</button>
+              <button type="submit" className="btn-primary" disabled={loading || uploadStatus === 'UPLOADING'}>
+                {loading ? 'Guardando...' : 'Guardar Cambios'}
+              </button>
             </div>
           </form>
         </div>

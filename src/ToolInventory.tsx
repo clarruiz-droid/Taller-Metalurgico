@@ -14,7 +14,8 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [editingTool, setEditingTool] = useState<Tool | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'IDLE' | 'PROCESSING' | 'UPLOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'GERENTE' || currentUser?.role === 'SUPERVISOR';
 
@@ -44,7 +45,9 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
   };
 
   useEffect(() => {
-    if (isNew || routeId) { localStorage.setItem('draft_tool', JSON.stringify(formData)); }
+    if (isNew || routeId) {
+      localStorage.setItem('draft_tool', JSON.stringify(formData));
+    }
   }, [formData, isNew, routeId]);
 
   const fetchTools = async () => {
@@ -54,58 +57,83 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
 
   const resizeImage = (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 600;
-        let width = img.width;
-        let height = img.height;
-        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob((blob) => { if (blob) resolve(blob); else reject(new Error('Error al procesar')); }, 'image/webp', 0.8);
-        }
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 800;
+          let width = img.width;
+          let height = img.height;
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob((blob) => {
+              if (blob) resolve(blob);
+              else reject(new Error('Error en canvas'));
+            }, 'image/jpeg', 0.7);
+          }
+        };
+        img.onerror = () => reject(new Error('Error cargando imagen'));
       };
-      img.onerror = reject;
+      reader.onerror = () => reject(new Error('Error leyendo archivo'));
     });
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      setUploading(true);
-      if (!event.target.files || event.target.files.length === 0) return;
-      
-      const file = event.target.files[0];
-      console.log('Iniciando procesamiento de imagen:', file.name);
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-      // REDIMENSIONAR IMAGEN (Asegurar que usamos el blob redimensionado)
-      const resizedBlob = await resizeImage(file);
-      const fileName = `tool-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
+    try {
+      setUploadStatus('PROCESSING');
+      setErrorMessage('');
+      
+      let dataToUpload: Blob | File = file;
+      let extension = file.name.split('.').pop() || 'jpg';
+
+      try {
+        const resized = await resizeImage(file);
+        dataToUpload = resized;
+        extension = 'jpg';
+      } catch (e) {
+        console.warn('Subiendo original:', e);
+        dataToUpload = file;
+      }
+
+      setUploadStatus('UPLOADING');
+      const fileName = `t-${Date.now()}.${extension}`;
 
       const { error: uploadError } = await supabase.storage
         .from('herramientas')
-        .upload(fileName, resizedBlob, { contentType: 'image/webp' });
+        .upload(fileName, dataToUpload, { 
+          contentType: extension === 'jpg' ? 'image/jpeg' : file.type,
+          cacheControl: '3600'
+        });
 
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from('herramientas').getPublicUrl(fileName);
       
+      const newUrl = data.publicUrl;
       setFormData(prev => {
-        const newState = { ...prev, image_url: data.publicUrl };
-        // Guardamos el borrador con la nueva imagen inmediatamente
+        const newState = { ...prev, image_url: newUrl };
         localStorage.setItem('draft_tool', JSON.stringify(newState));
         return newState;
       });
+      
+      setUploadStatus('SUCCESS');
+      setTimeout(() => setUploadStatus('IDLE'), 3000);
 
-      console.log('Imagen vinculada al formulario:', data.publicUrl);
     } catch (error: any) {
-      console.error('Error en subida:', error);
-      alert('Error al subir imagen: ' + error.message);
+      console.error('Error:', error);
+      setUploadStatus('ERROR');
+      setErrorMessage(error.message);
     } finally {
-      setUploading(false);
+      event.target.value = '';
     }
   };
 
@@ -117,14 +145,8 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
       else { await supabase.from('herramientas').insert([formData]); }
       localStorage.removeItem('draft_tool');
       navigate('/tools');
-    } catch (error: any) { alert('Error al guardar: ' + error.message); }
+    } catch (error: any) { alert('Error: ' + error.message); }
     finally { setLoading(false); }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('¿Eliminar esta herramienta?')) return;
-    await supabase.from('herramientas').delete().eq('id', id);
-    fetchTools();
   };
 
   const filteredTools = tools.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase()) || t.brand.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -149,7 +171,7 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
                   <div className="tool-header"><h4>{tool.description}</h4><span className="tool-brand">{tool.brand}</span></div>
                   <div className="tool-status-container"><span className="status-label">{TOOL_STATUS_LABELS[tool.status]}</span></div>
                 </div>
-                <div className="material-actions">{canEditRole && (<><button className="btn-action" onClick={() => navigate(`/tools/edit/${tool.id}`)}>✎</button><button className="btn-action btn-delete" onClick={() => handleDelete(tool.id)}>🗑</button></>)}</div>
+                <div className="material-actions">{canEditRole && (<><button className="btn-action" onClick={() => navigate(`/tools/edit/${tool.id}`)}>✎</button></>)}</div>
               </div>
             ))}
           </div>
@@ -161,16 +183,40 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
           <form className="material-form" onSubmit={handleSave}>
             <div className="form-group image-upload-section">
               <label>Imagen de la Herramienta</label>
-              <div className="preview-container">{formData.image_url ? <img src={formData.image_url} alt="Vista previa" className="form-image-preview" /> : <div className="no-image">🔧 Sin imagen</div>}</div>
-              <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} disabled={uploading} className="file-input" />
-              {uploading && <p className="uploading-text">Subiendo...</p>}
+              <div className="preview-container">
+                {formData.image_url ? (
+                  <img src={formData.image_url} alt="Vista previa" className="form-image-preview" />
+                ) : (
+                  <div className="no-image">
+                    {uploadStatus === 'PROCESSING' ? '📸 Procesando...' : 
+                     uploadStatus === 'UPLOADING' ? '☁️ Subiendo...' : 
+                     '🔧 Sin imagen'}
+                  </div>
+                )}
+              </div>
+              
+              <div className="upload-controls">
+                <input 
+                  type="file" accept="image/*" capture="environment" 
+                  onChange={handleFileUpload} 
+                  disabled={uploadStatus === 'PROCESSING' || uploadStatus === 'UPLOADING'} 
+                  id="tool-camera-input" style={{ display: 'none' }}
+                />
+                <label htmlFor="tool-camera-input" className="btn-primary" style={{ backgroundColor: 'var(--secondary-color)', marginBottom: '1rem' }}>
+                  {uploadStatus === 'PROCESSING' || uploadStatus === 'UPLOADING' ? 'Cargando...' : '📷 Tomar Foto / Galería'}
+                </label>
+              </div>
+
+              {uploadStatus === 'SUCCESS' && <p style={{ color: '#10b981', fontSize: '0.8rem', textAlign: 'center' }}>✅ Imagen cargada</p>}
+              {uploadStatus === 'ERROR' && <p style={{ color: '#ef4444', fontSize: '0.8rem', textAlign: 'center' }}>❌ Error: {errorMessage}</p>}
             </div>
+
             <div className="form-group"><label>Descripción / Nombre</label><input type="text" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Ej: Taladro de banco" required className="form-input" /></div>
             <div className="form-group"><label>Marca / Modelo</label><input type="text" value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="Ej: DeWalt" required className="form-input" /></div>
             <div className="form-group"><label>Estado</label><select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as ToolStatus})} className="form-input">{Object.entries(TOOL_STATUS_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}</select></div>
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={() => navigate('/tools')}>Cancelar</button>
-              <button type="submit" className="btn-primary" disabled={loading || uploading}>Guardar Herramienta</button>
+              <button type="submit" className="btn-primary" disabled={loading || uploadStatus === 'UPLOADING'}>Guardar Cambios</button>
             </div>
           </form>
         </div>
