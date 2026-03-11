@@ -5,7 +5,7 @@ import { supabase } from './lib/supabase';
 import { TOOL_STATUS_LABELS } from './types';
 import './Inventory.css';
 
-const ToolInventory: React.FC<{ onBack: () => void; currentUser: User | null }> = ({ onBack, currentUser }) => {
+const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) => {
   const { id: routeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isNew = window.location.pathname.endsWith('/new');

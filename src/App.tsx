@@ -159,37 +159,37 @@ function App() {
 
           <Route path="/material-inventory" element={
             <ProtectedRoute>
-              <MaterialInventory onBack={() => navigate('/dashboard')} currentUser={currentUser} />
+              <MaterialInventory currentUser={currentUser} />
             </ProtectedRoute>
           } />
           
           <Route path="/material-inventory/edit/:id" element={
             <ProtectedRoute>
-              <MaterialInventory onBack={() => navigate('/material-inventory')} currentUser={currentUser} />
+              <MaterialInventory currentUser={currentUser} />
             </ProtectedRoute>
           } />
 
           <Route path="/material-inventory/new" element={
             <ProtectedRoute>
-              <MaterialInventory onBack={() => navigate('/material-inventory')} currentUser={currentUser} />
+              <MaterialInventory currentUser={currentUser} />
             </ProtectedRoute>
           } />
           
           <Route path="/tools" element={
             <ProtectedRoute>
-              <ToolInventory onBack={() => navigate('/dashboard')} currentUser={currentUser} />
+              <ToolInventory currentUser={currentUser} />
             </ProtectedRoute>
           } />
 
           <Route path="/tools/edit/:id" element={
             <ProtectedRoute>
-              <ToolInventory onBack={() => navigate('/tools')} currentUser={currentUser} />
+              <ToolInventory currentUser={currentUser} />
             </ProtectedRoute>
           } />
 
           <Route path="/tools/new" element={
             <ProtectedRoute>
-              <ToolInventory onBack={() => navigate('/tools')} currentUser={currentUser} />
+              <ToolInventory currentUser={currentUser} />
             </ProtectedRoute>
           } />
 

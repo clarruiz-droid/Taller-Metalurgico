@@ -4,7 +4,7 @@ import type { Material, User } from './types';
 import { supabase } from './lib/supabase';
 import './Inventory.css';
 
-const MaterialInventory: React.FC<{ onBack: () => void; currentUser: User | null }> = ({ onBack, currentUser }) => {
+const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) => {
   const { id: routeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isNew = window.location.pathname.endsWith('/new');
