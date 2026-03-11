@@ -10,6 +10,8 @@ const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | PurchaseStatus>('ALL');
   
   const [formData, setFormData] = useState({
     supplier_id: '',
@@ -92,6 +94,12 @@ const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     m.description.toLowerCase().includes(itemSearch.toLowerCase())
   );
 
+  const filteredPurchases = purchases.filter(p => {
+    const matchesSupplier = (p.supplier_name || '').toLowerCase().includes(supplierSearch.toLowerCase());
+    const matchesStatus = statusFilter === 'ALL' || p.status === statusFilter;
+    return matchesSupplier && matchesStatus;
+  });
+
   const getStatusColor = (status: PurchaseStatus) => {
     switch (status) {
       case 'PAGADA': return '#10b981';
@@ -109,10 +117,29 @@ const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       </header>
 
       {!showForm ? (
-        <div className="material-list">
-          {purchases.length === 0 && !loading && <p className="empty-msg">No hay compras registradas.</p>}
-          {purchases.map(p => (
-            <div key={p.id} className="material-card">
+        <>
+          {/* BARRA DE BÚSQUEDA Y FILTROS */}
+          <div className="search-bar">
+            <input 
+              type="text" 
+              placeholder="🔍 Buscar por proveedor..." 
+              value={supplierSearch}
+              onChange={(e) => setSupplierSearch(e.target.value)}
+              className="form-input"
+            />
+          </div>
+
+          <div className="filter-tabs budget-filters" style={{ marginBottom: '1.5rem' }}>
+            <button className={`filter-tab ${statusFilter === 'ALL' ? 'active' : ''}`} onClick={() => setStatusFilter('ALL')}>Todas</button>
+            <button className={`filter-tab ${statusFilter === 'PAGADA' ? 'active' : ''}`} onClick={() => setStatusFilter('PAGADA')}>Pagadas</button>
+            <button className={`filter-tab ${statusFilter === 'CTA_CTE' ? 'active' : ''}`} onClick={() => setStatusFilter('CTA_CTE')}>Cta Cte</button>
+            <button className={`filter-tab ${statusFilter === 'PARCIAL' ? 'active' : ''}`} onClick={() => setStatusFilter('PARCIAL')}>Parcial</button>
+          </div>
+
+          <div className="material-list">
+            {filteredPurchases.length === 0 && !loading && <p className="empty-msg">No hay compras que coincidan con los filtros.</p>}
+            {filteredPurchases.map(p => (
+              <div key={p.id} className="material-card">
               <div className="material-info">
                 <div className="tool-header">
                   <h4>{p.supplier_name}</h4>
