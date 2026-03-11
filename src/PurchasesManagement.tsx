@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import type { Purchase, Supplier, Material, PurchaseItem } from './types';
+import type { Purchase, Supplier, Material, PurchaseItem, PurchaseStatus } from './types';
 import { supabase } from './lib/supabase';
+import { PURCHASE_STATUS_LABELS } from './types';
 import './Inventory.css';
 
 const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
@@ -14,7 +15,8 @@ const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     supplier_id: '',
     purchase_date: new Date().toISOString().split('T')[0],
     items: [] as PurchaseItem[],
-    observations: ''
+    observations: '',
+    status: 'PAGADA' as PurchaseStatus
   });
 
   const [itemSearch, setItemSearch] = useState('');
@@ -90,6 +92,15 @@ const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     m.description.toLowerCase().includes(itemSearch.toLowerCase())
   );
 
+  const getStatusColor = (status: PurchaseStatus) => {
+    switch (status) {
+      case 'PAGADA': return '#10b981';
+      case 'CTA_CTE': return '#f59e0b';
+      case 'PARCIAL': return '#3b82f6';
+      default: return 'var(--text-secondary)';
+    }
+  };
+
   return (
     <div className="inventory-view">
       <header className="view-header">
@@ -105,7 +116,12 @@ const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <div className="material-info">
                 <div className="tool-header">
                   <h4>{p.supplier_name}</h4>
-                  <span className="price-tag">${Number(p.total_amount).toLocaleString()}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                    <span className="price-tag">${Number(p.total_amount).toLocaleString()}</span>
+                    <span className="status-badge" style={{ backgroundColor: getStatusColor(p.status), color: 'white', fontSize: '0.65rem', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
+                      {PURCHASE_STATUS_LABELS[p.status]}
+                    </span>
+                  </div>
                 </div>
                 <p className="user-id">📅 {new Date(p.purchase_date).toLocaleDateString()}</p>
                 <div className="selected-items-list" style={{ marginTop: '0.5rem' }}>
@@ -138,6 +154,19 @@ const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <div className="form-group">
               <label>Fecha de Compra</label>
               <input type="date" value={formData.purchase_date} onChange={e => setFormData({...formData, purchase_date: e.target.value})} required className="form-input" />
+            </div>
+
+            <div className="form-group">
+              <label>Estado de Pago</label>
+              <select 
+                value={formData.status} 
+                onChange={e => setFormData({...formData, status: e.target.value as PurchaseStatus})}
+                className="form-input"
+              >
+                <option value="PAGADA">Pagada</option>
+                <option value="CTA_CTE">Cuenta Corriente (Pendiente)</option>
+                <option value="PARCIAL">Pago Parcial</option>
+              </select>
             </div>
 
             <div className="form-group status-group-highlight">

@@ -113,6 +113,8 @@ export interface PurchaseItem {
   unit_price: number;
 }
 
+export type PurchaseStatus = 'PAGADA' | 'CTA_CTE' | 'PARCIAL';
+
 export interface Purchase {
   id: string;
   supplier_id: string;
@@ -121,8 +123,15 @@ export interface Purchase {
   total_amount: number;
   items: PurchaseItem[];
   observations?: string;
+  status: PurchaseStatus;
   created_at: string;
 }
+
+export const PURCHASE_STATUS_LABELS: Record<PurchaseStatus, string> = {
+  PAGADA: 'Pagada',
+  CTA_CTE: 'Cuenta Corriente',
+  PARCIAL: 'Pago Parcial'
+};
 
 export interface WorkOrderHistory {
   id: string;

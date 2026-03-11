@@ -1,0 +1,5 @@
+-- ACTUALIZACIÓN DE ESTADOS PARA COMPRAS (v1.10.0) --
+ALTER TABLE public.compras 
+ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'PAGADA';
+
+COMMENT ON COLUMN public.compras.status IS 'Estado financiero: PAGADA, CTA_CTE, PARCIAL';
