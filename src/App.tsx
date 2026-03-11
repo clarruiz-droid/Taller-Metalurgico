@@ -246,7 +246,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>&copy; 2026 Taller Metalúrgico - v1.11.0</p>
+        <p>&copy; 2026 Taller Metalúrgico - v1.11.3</p>
       </footer>
     </div>
   )
