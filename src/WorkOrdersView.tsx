@@ -162,6 +162,12 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
     }
   };
 
+  const handleDeleteImage = (index: number) => {
+    if (!window.confirm('¿Eliminar esta imagen del trabajo?')) return;
+    const newImages = (formData.images || []).filter((_, i) => i !== index);
+    setFormData({ ...formData, images: newImages });
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -382,7 +388,17 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
               <label>📸 Fotos del Trabajo</label>
               <div className="budget-images-gallery" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px', marginTop: '1rem' }}>
                 {formData.images?.map((url, idx) => (
-                  <div key={idx} className="material-img" style={{ width: '100%', height: '100px', cursor: 'pointer' }} onClick={() => window.open(url, '_blank')}><img src={url} alt={`Trabajo ${idx}`} /></div>
+                  <div key={idx} className="material-img" style={{ width: '100%', height: '100px', position: 'relative' }}>
+                    <img src={url} alt={`Trabajo ${idx}`} style={{ cursor: 'pointer' }} onClick={() => window.open(url, '_blank')} />
+                    <button 
+                      type="button" 
+                      className="btn-action btn-delete" 
+                      style={{ position: 'absolute', top: '5px', right: '5px', width: '24px', height: '24px', fontSize: '0.7rem', padding: 0, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', zIndex: 10 }}
+                      onClick={() => handleDeleteImage(idx)}
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))}
                 <label className="menu-item" style={{ padding: '1rem', border: '2px dashed var(--border-color)', cursor: 'pointer', height: '100px', justifyContent: 'center', marginBottom: 0 }}>
                   <span className="icon" style={{ fontSize: '1.25rem' }}>🖼️</span>
