@@ -135,7 +135,7 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
 
     setLoading(true);
     try {
-      const newImages = [...(formData.images || [])];
+      const uploadedUrls: string[] = [];
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -150,11 +150,27 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
           .from('presupuestos')
           .getPublicUrl(data.path);
 
-        newImages.push(publicUrl);
+        uploadedUrls.push(publicUrl);
       }
 
-      setFormData({ ...formData, images: newImages });
-      // NOTA: No guardamos en DB aquí, solo en el estado. Se guarda al final con handleSave.
+      // Actualizar el estado de forma segura
+      setFormData(prev => {
+        const newImages = [...(prev.images || []), ...uploadedUrls];
+        
+        // Guardar en la base de datos de inmediato para evitar pérdida en móviles
+        supabase.from('ordenes_trabajo')
+          .update({ images: newImages })
+          .eq('id', editingOrder.id)
+          .then(({ error }) => {
+            if (!error) logChange(editingOrder.id, 'MODIFICACION', 'Se subieron nuevas fotos del progreso');
+          });
+
+        return { ...prev, images: newImages };
+      });
+      
+      // Limpiar el input para permitir subir la misma foto si se borró
+      e.target.value = '';
+
     } catch (error: any) {
       alert('Error al subir imágenes: ' + error.message);
     } finally {
@@ -162,10 +178,24 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
     }
   };
 
-  const handleDeleteImage = (index: number) => {
+  const handleDeleteImage = async (index: number) => {
     if (!window.confirm('¿Eliminar esta imagen del trabajo?')) return;
-    const newImages = (formData.images || []).filter((_, i) => i !== index);
-    setFormData({ ...formData, images: newImages });
+    
+    setFormData(prev => {
+      const newImages = (prev.images || []).filter((_, i) => i !== index);
+      
+      // Guardar borrado en DB inmediatamente
+      if (editingOrder) {
+        supabase.from('ordenes_trabajo')
+          .update({ images: newImages })
+          .eq('id', editingOrder.id)
+          .then(({ error }) => {
+            if (!error) logChange(editingOrder.id, 'MODIFICACION', 'Se eliminó una foto del trabajo');
+          });
+      }
+      
+      return { ...prev, images: newImages };
+    });
   };
 
   const handleSave = async (e: React.FormEvent) => {
