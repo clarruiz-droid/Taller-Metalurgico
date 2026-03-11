@@ -24,6 +24,7 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
   const [statusFilter, setStatusFilter] = useState<'ALL' | WorkOrderStatus>('ALL');
   const [loading, setLoading] = useState(true);
   const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
+  const [uploadLog, setUploadLog] = useState('');
 
   const [formData, setFormData] = useState<Partial<WorkOrder>>({
     client_name: '',
@@ -44,12 +45,24 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
     setLoading(true);
     await fetchData();
     if (routeId) {
-      await loadSingleOrder(routeId);
-    } else {
-      setEditingOrder(null);
+      const { data } = await supabase.from('ordenes_trabajo').select('*').eq('id', routeId).single();
+      if (data) {
+        setEditingOrder(data);
+        // Borrador local para proteger fotos tomadas
+        const draft = localStorage.getItem(`draft_wo_${routeId}`);
+        if (draft) setFormData(JSON.parse(draft));
+        else setFormData(data);
+        
+        fetchHistory(routeId);
+        if (data.budget_id) fetchBudgetDetails(data.budget_id);
+      }
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (routeId) localStorage.setItem(`draft_wo_${routeId}`, JSON.stringify(formData));
+  }, [formData, routeId]);
 
   const fetchData = async () => {
     try {
@@ -58,319 +71,107 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
         supabase.from('profiles').select('id, full_name, role').order('full_name'),
         supabase.from('herramientas').select('*')
       ]);
-
-      if (!woRes.error) {
-        setWorkOrders(woRes.data.map((wo: any) => ({
-          ...wo,
-          assigned_to_name: wo.profiles?.full_name || 'Sin asignar'
-        })));
-      }
-      
-      if (!uRes.error) {
-        const mappedUsers = uRes.data
-          .filter((p: any) => p.role === 'OPERARIO' || p.role === 'SUPERVISOR')
-          .map((p: any) => ({
-            id: p.id,
-            name: p.full_name,
-            role: p.role,
-            username: ''
-          }));
-        setUsers(mappedUsers);
-      }
-
+      if (!woRes.error) setWorkOrders(woRes.data.map((wo: any) => ({ ...wo, assigned_to_name: wo.profiles?.full_name || 'Sin asignar' })));
+      if (!uRes.error) setUsers(uRes.data.filter((p: any) => p.role === 'OPERARIO' || p.role === 'SUPERVISOR').map((p: any) => ({ id: p.id, name: p.full_name, role: p.role, username: '' })));
       if (!tRes.error) setAllTools(tRes.data || []);
-    } catch (err) {
-      console.error('Error cargando datos:', err);
-    }
-  };
-
-  const loadSingleOrder = async (id: string) => {
-    const { data, error } = await supabase
-      .from('ordenes_trabajo')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (!error && data) {
-      setEditingOrder(data);
-      setFormData(data);
-      fetchHistory(id);
-      if (data.budget_id) fetchBudgetDetails(data.budget_id);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const fetchBudgetDetails = async (budgetId: number) => {
-    const { data, error } = await supabase
-      .from('presupuestos')
-      .select('materials, tools')
-      .eq('id', budgetId)
-      .single();
-    
-    if (!error && data) {
-      setBudgetInfo(data);
-    }
+    const { data } = await supabase.from('presupuestos').select('materials, tools').eq('id', budgetId).single();
+    if (data) setBudgetInfo(data);
   };
 
   const fetchHistory = async (orderId: string) => {
-    const { data, error } = await supabase
-      .from('historial_ordenes')
-      .select('*')
-      .eq('order_id', orderId)
-      .order('created_at', { ascending: false });
-    
-    if (!error) setHistory(data || []);
+    const { data } = await supabase.from('historial_ordenes').select('*').eq('order_id', orderId).order('created_at', { ascending: false });
+    if (data) setHistory(data);
   };
 
   const logChange = async (orderId: string, action: string, details: string) => {
-    await supabase.from('historial_ordenes').insert([{
-      order_id: orderId,
-      user_id: currentUser?.id,
-      user_name: currentUser?.name || 'Sistema',
-      action,
-      details
-    }]);
+    await supabase.from('historial_ordenes').insert([{ order_id: orderId, user_id: currentUser?.id, user_name: currentUser?.name || 'Sistema', action, details }]);
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !editingOrder) return;
+    const file = e.target.files?.[0];
+    if (!file || !editingOrder) return;
 
-    setLoading(true);
     try {
-      const uploadedUrls: string[] = [];
+      setUploadLog('⏳ Subiendo...');
+      const fileName = `wo-${editingOrder.id}-${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from('presupuestos').upload(fileName, file);
+      if (error) throw error;
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        // Generamos un nombre seguro: marca de tiempo + random + extension original o jpg
-        const fileExt = file.name.split('.').pop() || 'jpg';
-        const fileName = `work-orders/${editingOrder.id}/${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
+      const { data } = supabase.storage.from('presupuestos').getPublicUrl(fileName);
+      const newUrl = data.publicUrl;
+
+      setFormData(prev => {
+        const updatedImages = [...(prev.images || []), newUrl];
+        const newState = { ...prev, images: updatedImages };
+        localStorage.setItem(`draft_wo_${editingOrder.id}`, JSON.stringify(newState));
         
-        const { error } = await supabase.storage
-          .from('presupuestos')
-          .upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (error) {
-          console.error('Error subiendo al storage:', error);
-          throw new Error(`Error en Storage: ${error.message}`);
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('presupuestos')
-          .getPublicUrl(fileName);
-
-        if (publicUrl) {
-          uploadedUrls.push(publicUrl);
-        }
-      }
-
-      if (uploadedUrls.length > 0) {
-        // 1. Calculamos la nueva lista completa de imágenes
-        const currentImages = formData.images || [];
-        const updatedImages = [...currentImages, ...uploadedUrls];
-
-        // 2. Guardamos en la base de datos de inmediato (Crítico para móviles)
-        const { error: updateError } = await supabase.from('ordenes_trabajo')
-          .update({ images: updatedImages })
-          .eq('id', editingOrder.id);
-
-        if (updateError) {
-          console.error('Error actualizando tabla ordenes:', updateError);
-          throw new Error(`Error en DB: ${updateError.message}`);
-        }
-
-        // 3. Actualizamos el estado local para que el usuario las vea
-        setFormData(prev => ({ ...prev, images: updatedImages }));
+        // Persistencia inmediata en DB para seguridad extra
+        supabase.from('ordenes_trabajo').update({ images: updatedImages }).eq('id', editingOrder.id).then();
+        logChange(editingOrder.id, 'MODIFICACION', 'Se subió una nueva foto');
         
-        // 4. Registramos en el historial
-        await logChange(editingOrder.id, 'MODIFICACION', `Se subieron ${uploadedUrls.length} fotos nuevas`);
-        
-        // Eliminado alert() bloqueante para evitar cierres de app en móviles
-      }
-      
-      e.target.value = ''; // Reset input
-
-    } catch (error: any) {
-      console.error('Fallo completo en carga de imágenes:', error);
-      // Solo alert en caso de error crítico
-      alert('Error técnico al subir: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteImage = async (index: number) => {
-    if (!window.confirm('¿Eliminar esta imagen del trabajo?')) return;
-    
-    setFormData(prev => {
-      const newImages = (prev.images || []).filter((_, i) => i !== index);
-      
-      // Guardar borrado en DB inmediatamente
-      if (editingOrder) {
-        supabase.from('ordenes_trabajo')
-          .update({ images: newImages })
-          .eq('id', editingOrder.id)
-          .then(({ error }) => {
-            if (!error) logChange(editingOrder.id, 'MODIFICACION', 'Se eliminó una foto del trabajo');
-          });
-      }
-      
-      return { ...prev, images: newImages };
-    });
+        return newState;
+      });
+      setUploadLog('✅ ¡Lista!');
+    } catch (err: any) { setUploadLog('❌ ' + err.message); }
+    finally { e.target.value = ''; }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const dataToSave: any = {
-        client_name: formData.client_name,
-        description: formData.description,
-        status: formData.status,
-        priority: formData.priority,
-        estimated_end_date: formData.estimated_end_date,
-        assigned_to: formData.assigned_to || null,
-        observations: formData.observations,
-        budget_id: formData.budget_id,
-        images: formData.images || []
-      };
+      const dataToSave: any = { ...formData };
+      delete dataToSave.assigned_to_name; // Limpiar campos calculados
 
       if (editingOrder) {
-        // LÓGICA DE DESCUENTO DE STOCK
         if (formData.status === 'FINALIZADO' && !editingOrder.stock_discounted && formData.budget_id) {
-          if (window.confirm('La orden se marcará como FINALIZADA. ¿Desea descontar automáticamente los materiales del presupuesto del stock actual?')) {
-            const { data: budgetData } = await supabase
-              .from('presupuestos')
-              .select('materials')
-              .eq('id', formData.budget_id)
-              .single();
-
+          if (window.confirm('¿Descontar stock automáticamente?')) {
+            const { data: budgetData } = await supabase.from('presupuestos').select('materials').eq('id', formData.budget_id).single();
             if (budgetData?.materials) {
               for (const item of budgetData.materials) {
                 const { data: matData } = await supabase.from('materiales').select('quantity').eq('id', item.id).single();
-                if (matData) {
-                  const newQty = Math.max(0, Number(matData.quantity) - Number(item.quantity));
-                  await supabase.from('materiales').update({ quantity: newQty }).eq('id', item.id);
-                }
+                if (matData) await supabase.from('materiales').update({ quantity: Math.max(0, Number(matData.quantity) - Number(item.quantity)) }).eq('id', item.id);
               }
               dataToSave.stock_discounted = true;
             }
           }
         }
-
-        const { error } = await supabase.from('ordenes_trabajo').update(dataToSave).eq('id', editingOrder.id);
-        if (error) throw error;
-        
-        const changes: string[] = [];
-        const fieldLabels: Record<string, string> = {
-          status: 'Estado', priority: 'Prioridad', assigned_to: 'Asignación',
-          client_name: 'Cliente', description: 'Descripción',
-          estimated_end_date: 'Fecha Entrega', observations: 'Observaciones',
-          images: 'Fotos'
-        };
-
-        (Object.keys(dataToSave) as string[]).forEach(key => {
-          const oldVal = editingOrder[key as keyof WorkOrder];
-          const newVal = dataToSave[key];
-          if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-            const label = fieldLabels[key] || key;
-            if (key === 'assigned_to') {
-              const oldUser = users.find(u => u.id === (oldVal as string))?.name || 'Sin asignar';
-              const newUser = users.find(u => u.id === (newVal as string))?.name || 'Sin asignar';
-              changes.push(`${String(label)}: [${oldUser}] ➔ [${newUser}]`);
-            } else if (key === 'images') {
-              changes.push(`Fotos: Se actualizaron las imágenes del trabajo`);
-            } else {
-              changes.push(`${String(label)}: [${String(oldVal || 'Vacío')}] ➔ [${String(newVal || 'Vacío')}]`);
-            }
-          }
-        });
-        
-        if (changes.length > 0) {
-          await logChange(editingOrder.id, 'MODIFICACION', changes.join(' | '));
-        }
-      } else {
-        const { data, error } = await supabase.from('ordenes_trabajo').insert([dataToSave]).select().single();
-        if (error) throw error;
-        await logChange(data.id, 'CREACION', 'Orden de trabajo iniciada');
+        await supabase.from('ordenes_trabajo').update(dataToSave).eq('id', editingOrder.id);
       }
-      
-      alert('Orden guardada con éxito');
+      localStorage.removeItem(`draft_wo_${routeId}`);
       navigate('/work-orders');
-    } catch (error: any) {
-      console.error('Error al guardar orden:', error);
-      alert('Error: ' + (error.message || 'No se pudo guardar la orden'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openEdit = (wo: WorkOrder) => {
-    navigate(`/work-orders/edit/${wo.id}`);
-  };
-
-  const getPriorityColor = (p: string) => {
-    switch(p) {
-      case 'ALTA': return '#ef4444';
-      case 'MEDIA': return '#f59e0b';
-      case 'BAJA': return '#3498db';
-      default: return 'var(--text-secondary)';
-    }
+    } catch (err: any) { alert(err.message); }
+    finally { setLoading(false); }
   };
 
   const filteredOrders = workOrders.filter(wo => {
-    const matchesSearch = (wo.client_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-                         (wo.description?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+    const matchesSearch = (wo.client_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || (wo.description?.toLowerCase() || '').includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || wo.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   return (
     <div className="inventory-view">
-      <header className="view-header">
-        <button className="btn-back" onClick={onBack}>← Volver</button>
-        <h3>{routeId ? 'Detalle de Orden' : 'Órdenes de Trabajo'}</h3>
-      </header>
+      <header className="view-header"><button className="btn-back" onClick={() => navigate(routeId ? '/work-orders' : '/dashboard')}>← Volver</button><h3>{routeId ? 'Detalle de Orden' : 'Órdenes de Trabajo'}</h3></header>
 
       {!routeId ? (
         <>
-          <div className="search-bar">
-            <input 
-              type="text" 
-              placeholder="🔍 Buscar por cliente o trabajo..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="form-input"
-            />
-          </div>
-
+          <div className="search-bar"><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="form-input" /></div>
           <div className="filter-tabs budget-filters" style={{ marginBottom: '1.5rem' }}>
             <button className={`filter-tab ${statusFilter === 'ALL' ? 'active' : ''}`} onClick={() => setStatusFilter('ALL')}>Todas</button>
             <button className={`filter-tab ${statusFilter === 'PENDIENTE' ? 'active' : ''}`} onClick={() => setStatusFilter('PENDIENTE')}>Pendientes</button>
             <button className={`filter-tab ${statusFilter === 'PROCESO' ? 'active' : ''}`} onClick={() => setStatusFilter('PROCESO')}>En Proceso</button>
             <button className={`filter-tab ${statusFilter === 'FINALIZADO' ? 'active' : ''}`} onClick={() => setStatusFilter('FINALIZADO')}>Finalizadas</button>
           </div>
-
           <div className="material-list">
-            {filteredOrders.length === 0 && !loading && <p className="empty-msg">No hay órdenes que coincidan con los filtros.</p>}
             {filteredOrders.map(wo => (
-              <div key={wo.id} className="material-card wo-card clickable" onClick={() => openEdit(wo)}>
-                <div className="wo-priority-indicator" style={{ backgroundColor: getPriorityColor(wo.priority) }}></div>
-                <div className="material-info">
-                  <div className="tool-header">
-                    <h4>{wo.client_name}</h4>
-                    <span className={`status-badge status-${wo.status.toLowerCase()}`}>
-                      {WORK_ORDER_STATUS_LABELS[wo.status]}
-                    </span>
-                  </div>
-                  <p className="wo-desc">{wo.description}</p>
-                  <div className="budget-meta-list">
-                    <span className="meta-tag">👤 {wo.assigned_to_name}</span>
-                    <span className="meta-tag">📅 Entrega: {new Date(wo.estimated_end_date).toLocaleDateString()}</span>
-                  </div>
-                </div>
+              <div key={wo.id} className="material-card wo-card clickable" onClick={() => navigate(`/work-orders/edit/${wo.id}`)}>
+                <div className="wo-priority-indicator" style={{ backgroundColor: wo.priority === 'ALTA' ? '#ef4444' : wo.priority === 'MEDIA' ? '#f59e0b' : '#3498db' }}></div>
+                <div className="material-info"><div className="tool-header"><h4>{wo.client_name}</h4><span className={`status-badge status-${wo.status.toLowerCase()}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span></div><p className="wo-desc">{wo.description}</p></div>
               </div>
             ))}
           </div>
@@ -378,143 +179,26 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
       ) : (
         <div className="material-form-container">
           <form className="material-form" onSubmit={handleSave}>
-            <div className="form-group">
-              <label>Cliente</label>
-              <input type="text" value={formData.client_name} onChange={e => setFormData({...formData, client_name: e.target.value})} required className="form-input" />
-            </div>
-            <div className="form-group">
-              <label>Descripción del Trabajo</label>
-              <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required className="form-input" rows={3} />
-            </div>
-
-            {budgetInfo && (
-              <div className="form-group status-group-highlight" style={{ backgroundColor: 'rgba(52, 152, 219, 0.03)', borderStyle: 'solid' }}>
-                <label style={{ color: 'var(--primary-color)', fontSize: '0.75rem' }}>🛠️ Planificado en Presupuesto</label>
-                <div style={{ marginTop: '0.75rem' }}>
-                  <p style={{ fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.5rem', opacity: 0.8 }}>MATERIALES:</p>
-                  <div className="selected-items-list">
-                    {budgetInfo.materials?.map((m, idx) => (
-                      <span key={idx} className="item-chip view-mode">{m.description} <span className="chip-qty-view">x{m.quantity}</span></span>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ marginTop: '1rem' }}>
-                  <p style={{ fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.5rem', opacity: 0.8 }}>HERRAMIENTAS:</p>
-                  <div className="selected-items-list">
-                    {budgetInfo.tools?.map((toolId, idx) => {
-                      const toolName = allTools.find(t => t.id === toolId)?.description || 'Herramienta desconocida';
-                      return <span key={idx} className="tool-chip">{toolName}</span>;
-                    })}
-                  </div>
-                </div>
+            <div className="form-group status-group-highlight" style={{ textAlign: 'center' }}>
+              <div className="budget-images-gallery" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '10px', marginBottom: '1rem' }}>
+                {formData.images?.map((url, idx) => (<div key={idx} className="material-img" style={{ height: '80px' }}><img src={url} alt="" onClick={() => window.open(url, '_blank')} /></div>))}
               </div>
-            )}
-
+              <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} id="wo-cam" style={{ display: 'none' }} />
+              <label htmlFor="wo-cam" className="btn-primary" style={{ backgroundColor: 'var(--secondary-color)', display: 'inline-flex', width: 'auto', padding: '12px 24px' }}>📸 TOMAR FOTO</label>
+              {uploadLog && <p style={{ marginTop: '8px', fontSize: '0.75rem', fontWeight: 'bold' }}>{uploadLog}</p>}
+            </div>
+            <div className="form-group"><label>Cliente</label><input type="text" value={formData.client_name} onChange={e => setFormData({...formData, client_name: e.target.value})} required className="form-input" /></div>
+            <div className="form-group"><label>Descripción</label><textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required className="form-input" rows={3} /></div>
             <div className="form-row">
-              <div className="form-group">
-                <label>Prioridad</label>
-                <select value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})} className="form-input">
-                  <option value="BAJA">Baja</option>
-                  <option value="MEDIA">Media</option>
-                  <option value="ALTA">Alta</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Estado</label>
-                <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="form-input">
-                  <option value="PENDIENTE">Pendiente</option>
-                  <option value="PROCESO">En Proceso</option>
-                  <option value="FINALIZADO">Finalizado</option>
-                </select>
-              </div>
+              <div className="form-group"><label>Prioridad</label><select value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})} className="form-input"><option value="BAJA">Baja</option><option value="MEDIA">Media</option><option value="ALTA">Alta</option></select></div>
+              <div className="form-group"><label>Estado</label><select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="form-input"><option value="PENDIENTE">Pendiente</option><option value="PROCESO">En Proceso</option><option value="FINALIZADO">Finalizado</option></select></div>
             </div>
             <div className="form-row">
-              <div className="form-group">
-                <label>Asignar a</label>
-                <select value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})} className="form-input">
-                  <option value="">Sin asignar</option>
-                  {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Fecha Estimada Entrega</label>
-                <input type="date" value={formData.estimated_end_date} onChange={e => setFormData({...formData, estimated_end_date: e.target.value})} required className="form-input" />
-              </div>
+              <div className="form-group"><label>Asignar a</label><select value={formData.assigned_to} onChange={e => setFormData({...formData, assigned_to: e.target.value})} className="form-input"><option value="">Sin asignar</option>{users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+              <div className="form-group"><label>Entrega Estimada</label><input type="date" value={formData.estimated_end_date} onChange={e => setFormData({...formData, estimated_end_date: e.target.value})} required className="form-input" /></div>
             </div>
-            <div className="form-group">
-              <label>Observaciones / Notas</label>
-              <textarea value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} className="form-input" rows={2} />
-            </div>
-
-            <div className="form-group status-group-highlight">
-              <label>📸 Fotos del Trabajo</label>
-              <div className="budget-images-gallery" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px', marginTop: '1rem' }}>
-                {formData.images?.map((url, idx) => (
-                  <div key={idx} className="material-img" style={{ width: '100%', height: '100px', position: 'relative' }}>
-                    <img src={url} alt={`Trabajo ${idx}`} style={{ cursor: 'pointer' }} onClick={() => window.open(url, '_blank')} />
-                    <button 
-                      type="button" 
-                      className="btn-action btn-delete" 
-                      style={{ position: 'absolute', top: '5px', right: '5px', width: '24px', height: '24px', fontSize: '0.7rem', padding: 0, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', zIndex: 10 }}
-                      onClick={() => handleDeleteImage(idx)}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <label className="menu-item" style={{ padding: '1rem', border: '2px dashed var(--border-color)', cursor: 'pointer', height: '100px', justifyContent: 'center', marginBottom: 0 }}>
-                  <span className="icon" style={{ fontSize: '1.25rem' }}>🖼️</span>
-                  <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>Galería</span>
-                  <input type="file" multiple accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
-                </label>
-                <label className="menu-item" style={{ padding: '1rem', border: '2px dashed var(--primary-color)', cursor: 'pointer', height: '100px', justifyContent: 'center', marginBottom: 0, backgroundColor: 'rgba(52, 152, 219, 0.05)' }}>
-                  <span className="icon" style={{ fontSize: '1.25rem' }}>📷</span>
-                  <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>Cámara</span>
-                  <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} style={{ display: 'none' }} />
-                </label>
-              </div>
-            </div>
-            
-            <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={onBack}>Cancelar</button>
-              <button type="submit" className="btn-primary" disabled={loading}>Guardar Cambios</button>
-            </div>
+            <div className="form-actions"><button type="button" className="btn-secondary" onClick={() => navigate('/work-orders')}>Cancelar</button><button type="submit" className="btn-primary" disabled={loading}>Guardar Cambios</button></div>
           </form>
-
-          {/* SECCIÓN DE HISTORIAL - RESTRINGIDA PARA OPERARIOS Y COLAPSABLE */}
-          {currentUser && currentUser.role !== 'OPERARIO' && (
-            <div className="history-section">
-              <header 
-                className="history-toggle-header" 
-                onClick={() => setShowHistory(!showHistory)}
-                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              >
-                <h4>📜 Historial de Cambios</h4>
-                <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
-                  {showHistory ? '▲ Ocultar' : '▼ Ver Historial'}
-                </span>
-              </header>
-              
-              {showHistory && (
-                <div className="history-timeline" style={{ marginTop: '1.5rem' }}>
-                  {history.length === 0 ? (
-                    <p className="empty-msg">No hay registros de cambios aún.</p>
-                  ) : (
-                    history.map(log => (
-                      <div key={log.id} className="history-item">
-                        <div className="history-dot"></div>
-                        <div className="history-content">
-                          <div className="history-header"><strong>{log.user_name}</strong><span className="history-time">{new Date(log.created_at).toLocaleString()}</span></div>
-                          <div className="history-action-badge">{log.action}</div>
-                          <p className="history-details">{log.details}</p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
     </div>

@@ -14,8 +14,8 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [editingTool, setEditingTool] = useState<Tool | null>(null);
-  const [uploadStatus, setUploadStatus] = useState<'IDLE' | 'UPLOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [debugLog, setDebugLog] = useState('');
 
   const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'GERENTE' || currentUser?.role === 'SUPERVISOR';
 
@@ -35,18 +35,24 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
     await fetchTools();
     if (routeId) {
       const { data } = await supabase.from('herramientas').select('*').eq('id', routeId).single();
-      if (data) { setEditingTool(data); setFormData(data); }
+      if (data) {
+        setEditingTool(data);
+        const draft = localStorage.getItem(`draft_tool_${routeId}`);
+        if (draft) setFormData(JSON.parse(draft));
+        else setFormData(data);
+      }
     } else if (isNew) {
       setEditingTool(null);
-      const draft = localStorage.getItem('draft_tool');
+      const draft = localStorage.getItem('draft_tool_new');
       if (draft) setFormData(JSON.parse(draft));
     }
     setLoading(false);
   };
 
   useEffect(() => {
+    const key = routeId ? `draft_tool_${routeId}` : 'draft_tool_new';
     if (isNew || routeId) {
-      localStorage.setItem('draft_tool', JSON.stringify(formData));
+      localStorage.setItem(key, JSON.stringify(formData));
     }
   }, [formData, isNew, routeId]);
 
@@ -60,35 +66,22 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
     if (!file) return;
 
     try {
-      setUploadStatus('UPLOADING');
-      setErrorMessage('');
-      
-      const fileExt = file.name.split('.').pop() || 'jpg';
-      setUploadStatus('UPLOADING');
-      const fileName = `t-${Date.now()}.${fileExt}`;
+      setUploading(true);
+      setDebugLog('⏳ Procesando...');
+      const fileName = `tool-${Date.now()}.jpg`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('presupuestos')
-        .upload(fileName, file, { cacheControl: '3600', upsert: false });
-
+      setDebugLog('☁️ Subiendo...');
+      const { error: uploadError } = await supabase.storage.from('presupuestos').upload(fileName, file);
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from('presupuestos').getPublicUrl(fileName);
-      if (data?.publicUrl) {
-        setFormData(prev => {
-          const newState = { ...prev, image_url: data.publicUrl };
-          localStorage.setItem('draft_tool', JSON.stringify(newState));
-          return newState;
-        });
-        setUploadStatus('SUCCESS');
-      }
+      setFormData(prev => ({ ...prev, image_url: data.publicUrl }));
+      setDebugLog('✅ Cargada');
     } catch (error: any) {
-      console.error('Error:', error);
-      setUploadStatus('ERROR');
-      setErrorMessage(error.message || 'Error desconocido');
+      setDebugLog('❌ ' + error.message);
     } finally {
+      setUploading(false);
       event.target.value = '';
-      setTimeout(() => setUploadStatus(prev => prev === 'SUCCESS' ? 'IDLE' : prev), 5000);
     }
   };
 
@@ -98,35 +91,25 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
     try {
       if (editingTool) { await supabase.from('herramientas').update(formData).eq('id', editingTool.id); }
       else { await supabase.from('herramientas').insert([formData]); }
-      localStorage.removeItem('draft_tool');
+      localStorage.removeItem(routeId ? `draft_tool_${routeId}` : 'draft_tool_new');
       navigate('/tools');
-    } catch (error: any) { alert('Error al guardar: ' + error.message); }
+    } catch (error: any) { alert('Error: ' + error.message); }
     finally { setLoading(false); }
   };
 
-  const filteredTools = tools.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase()) || t.brand.toLowerCase().includes(searchTerm.toLowerCase()));
-
   return (
     <div className="inventory-view">
-      <header className="view-header">
-        <button className="btn-back" onClick={() => navigate('/dashboard')}>← Volver</button>
-        <h3>Inventario de Herramientas</h3>
-      </header>
+      <header className="view-header"><button className="btn-back" onClick={() => navigate('/dashboard')}>← Volver</button><h3>Herramientas</h3></header>
 
       {!routeId && !isNew ? (
         <>
-          <div className="search-bar">
-            <input type="text" placeholder="Buscar herramienta o marca..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="form-input" />
-          </div>
+          <div className="search-bar"><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="form-input" /></div>
           <div className="material-list">
-            {filteredTools.map(tool => (
+            {tools.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase())).map(tool => (
               <div key={tool.id} className="material-card">
-                <div className="material-img">{tool.image_url ? <img src={tool.image_url} alt={tool.description} /> : <div className="img-placeholder">🔧</div>}</div>
-                <div className="material-info">
-                  <div className="tool-header"><h4>{tool.description}</h4><span className="tool-brand">{tool.brand}</span></div>
-                  <div className="tool-status-container"><span className="status-label">{TOOL_STATUS_LABELS[tool.status]}</span></div>
-                </div>
-                <div className="material-actions">{canEditRole && (<><button className="btn-action" onClick={() => navigate(`/tools/edit/${tool.id}`)}>✎</button></>)}</div>
+                <div className="material-img">{tool.image_url ? <img src={tool.image_url} alt="" /> : <div className="img-placeholder">🔧</div>}</div>
+                <div className="material-info"><h4>{tool.description}</h4><span className="tool-brand">{tool.brand}</span></div>
+                <div className="material-actions">{canEditRole && <button className="btn-action" onClick={() => navigate(`/tools/edit/${tool.id}`)}>✎</button>}</div>
               </div>
             ))}
           </div>
@@ -134,42 +117,24 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
         </>
       ) : (
         <div className="material-form-container">
-          <h4>{editingTool ? 'Editar Herramienta' : 'Nueva Herramienta'}</h4>
+          <h4>{editingTool ? 'Editar' : 'Nueva'} Herramienta</h4>
           <form className="material-form" onSubmit={handleSave}>
-            <div className="form-group image-upload-section">
-              <label>Imagen de la Herramienta</label>
-              <div className="preview-container">
-                {formData.image_url ? (
-                  <img src={formData.image_url} alt="Vista previa" className="form-image-preview" />
-                ) : (
-                  <div className="no-image">
-                    {uploadStatus === 'UPLOADING' ? '☁️ Subiendo...' : '🔧 Sin imagen'}
-                  </div>
-                )}
+            <div className="form-group status-group-highlight" style={{ textAlign: 'center' }}>
+              <div className="preview-container" style={{ margin: '0 auto 1rem' }}>
+                {formData.image_url ? <img src={formData.image_url} alt="" className="form-image-preview" /> : <div className="no-image">Cámara Lista</div>}
               </div>
-              
-              <div className="upload-controls">
-                <input 
-                  type="file" accept="image/*" capture="environment" 
-                  onChange={handleFileUpload} 
-                  disabled={uploadStatus === 'UPLOADING'} 
-                  id="camera-input-tool" style={{ display: 'none' }}
-                />
-                <label htmlFor="camera-input-tool" className="btn-primary" style={{ backgroundColor: 'var(--secondary-color)', marginBottom: '1rem' }}>
-                  {uploadStatus === 'UPLOADING' ? 'Cargando...' : '📷 Tomar Foto / Galería'}
-                </label>
-              </div>
-
-              {uploadStatus === 'SUCCESS' && <p style={{ color: '#10b981', fontSize: '0.9rem', textAlign: 'center', fontWeight: 'bold' }}>✅ Imagen cargada</p>}
-              {uploadStatus === 'ERROR' && <p style={{ color: '#ef4444', fontSize: '0.9rem', textAlign: 'center', fontWeight: 'bold' }}>❌ Error: {errorMessage}</p>}
+              <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} id="cam-tool" style={{ display: 'none' }} disabled={uploading} />
+              <label htmlFor="cam-tool" className="btn-primary" style={{ backgroundColor: 'var(--secondary-color)', display: 'inline-flex', width: 'auto', padding: '15px 30px' }}>
+                {uploading ? '⏳ SUBIENDO...' : '📸 USAR CÁMARA'}
+              </label>
+              {debugLog && <p style={{ marginTop: '10px', fontSize: '0.8rem', fontWeight: 'bold', color: debugLog.includes('❌') ? '#ef4444' : '#3498db' }}>{debugLog}</p>}
             </div>
-
-            <div className="form-group"><label>Descripción / Nombre</label><input type="text" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Ej: Taladro de banco" required className="form-input" /></div>
-            <div className="form-group"><label>Marca / Modelo</label><input type="text" value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="Ej: DeWalt" required className="form-input" /></div>
+            <div className="form-group"><label>Descripción</label><input type="text" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required className="form-input" /></div>
+            <div className="form-group"><label>Marca</label><input type="text" value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} required className="form-input" /></div>
             <div className="form-group"><label>Estado</label><select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as ToolStatus})} className="form-input">{Object.entries(TOOL_STATUS_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}</select></div>
             <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={() => navigate('/tools')}>Cancelar</button>
-              <button type="submit" className="btn-primary" disabled={loading || uploadStatus === 'UPLOADING'}>Guardar Cambios</button>
+              <button type="button" className="btn-secondary" onClick={() => { localStorage.removeItem(routeId ? `draft_tool_${routeId}` : 'draft_tool_new'); navigate('/tools'); }}>Cancelar</button>
+              <button type="submit" className="btn-primary" disabled={loading || uploading}>Guardar Cambios</button>
             </div>
           </form>
         </div>

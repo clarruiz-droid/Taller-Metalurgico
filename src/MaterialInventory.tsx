@@ -13,8 +13,8 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
-  const [uploadStatus, setUploadStatus] = useState<'IDLE' | 'UPLOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [debugLog, setDebugLog] = useState('');
 
   const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'GERENTE' || currentUser?.role === 'SUPERVISOR';
 
@@ -35,18 +35,25 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
     await fetchMaterials();
     if (routeId) {
       const { data } = await supabase.from('materiales').select('*').eq('id', routeId).single();
-      if (data) { setEditingMaterial(data); setFormData(data); }
+      if (data) {
+        setEditingMaterial(data);
+        // Priorizar el borrador local si existe (para recuperar fotos tras refresco)
+        const draft = localStorage.getItem(`draft_mat_${routeId}`);
+        if (draft) setFormData(JSON.parse(draft));
+        else setFormData(data);
+      }
     } else if (isNew) {
       setEditingMaterial(null);
-      const draft = localStorage.getItem('draft_material');
+      const draft = localStorage.getItem('draft_mat_new');
       if (draft) setFormData(JSON.parse(draft));
     }
     setLoading(false);
   };
 
   useEffect(() => {
+    const key = routeId ? `draft_mat_${routeId}` : 'draft_mat_new';
     if (isNew || routeId) {
-      localStorage.setItem('draft_material', JSON.stringify(formData));
+      localStorage.setItem(key, JSON.stringify(formData));
     }
   }, [formData, isNew, routeId]);
 
@@ -60,43 +67,34 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
     if (!file) return;
 
     try {
-      setUploadStatus('UPLOADING');
-      setErrorMessage('');
+      setUploading(true);
+      setDebugLog('⏳ Procesando archivo...');
       
-      // Nombre de archivo único y seguro
-      const fileExt = file.name.split('.').pop() || 'jpg';
-      const fileName = `mat-${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
+      const fileName = `mat-${Date.now()}-${Math.floor(Math.random()*1000)}.jpg`;
 
-      // SUBIDA DIRECTA al bucket centralizado 'presupuestos'
+      setDebugLog('☁️ Subiendo a la nube...');
       const { error: uploadError } = await supabase.storage
         .from('presupuestos')
-        .upload(fileName, file, { 
-          cacheControl: '3600',
-          upsert: false
-        });
+        .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from('presupuestos').getPublicUrl(fileName);
       
       if (data?.publicUrl) {
-        setFormData(prev => {
-          const newState = { ...prev, image_url: data.publicUrl };
-          localStorage.setItem('draft_material', JSON.stringify(newState));
-          return newState;
-        });
-        setUploadStatus('SUCCESS');
+        setFormData(prev => ({ ...prev, image_url: data.publicUrl }));
+        setDebugLog('✅ Imagen cargada correctamente');
       } else {
-        throw new Error('No se pudo generar la URL de la imagen');
+        throw new Error('No se generó la URL pública');
       }
 
     } catch (error: any) {
-      console.error('Error subiendo:', error);
-      setUploadStatus('ERROR');
-      setErrorMessage(error.message || 'Error desconocido');
+      console.error('Error:', error);
+      setDebugLog('❌ Error: ' + (error.message || 'Fallo de conexión'));
+      alert('Error al cargar: ' + error.message);
     } finally {
+      setUploading(false);
       event.target.value = '';
-      setTimeout(() => setUploadStatus(prev => prev === 'SUCCESS' ? 'IDLE' : prev), 5000);
     }
   };
 
@@ -109,16 +107,20 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
       } else {
         await supabase.from('materiales').insert([formData]);
       }
-      localStorage.removeItem('draft_material');
+      localStorage.removeItem(routeId ? `draft_mat_${routeId}` : 'draft_mat_new');
       navigate('/material-inventory');
     } catch (error: any) {
-      alert('Error al guardar: ' + error.message);
+      alert('Error: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredMaterials = materials.filter(m => m.description.toLowerCase().includes(searchTerm.toLowerCase()));
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('¿Eliminar material?')) return;
+    await supabase.from('materiales').delete().eq('id', id);
+    fetchMaterials();
+  };
 
   return (
     <div className="inventory-view">
@@ -133,16 +135,11 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
             <input type="text" placeholder="Buscar material..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="form-input" />
           </div>
           <div className="material-list">
-            {filteredMaterials.map(material => (
-              <div key={material.id} className="material-card">
-                <div className="material-img">{material.image_url ? <img src={material.image_url} alt={material.description} /> : <div className="img-placeholder">📦</div>}</div>
-                <div className="material-info">
-                  <h4>{material.description}</h4>
-                  <div className="material-stats">
-                    <span className={`stock-badge ${Number(material.quantity) <= Number(material.min_stock) ? 'low-stock' : 'ok-stock'}`}>{material.quantity} {material.unit}</span>
-                  </div>
-                </div>
-                <div className="material-actions">{canEditRole && (<><button className="btn-action" onClick={() => navigate(`/material-inventory/edit/${material.id}`)}>✎</button></>)}</div>
+            {materials.filter(m => m.description.toLowerCase().includes(searchTerm.toLowerCase())).map(m => (
+              <div key={m.id} className="material-card">
+                <div className="material-img">{m.image_url ? <img src={m.image_url} alt="" /> : <div className="img-placeholder">📦</div>}</div>
+                <div className="material-info"><h4>{m.description}</h4><span className={`stock-badge ${Number(m.quantity) <= Number(m.min_stock) ? 'low-stock' : 'ok-stock'}`}>{m.quantity} {m.unit}</span></div>
+                <div className="material-actions">{canEditRole && <button className="btn-action" onClick={() => navigate(`/material-inventory/edit/${m.id}`)}>✎</button>}</div>
               </div>
             ))}
           </div>
@@ -152,59 +149,29 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
         <div className="material-form-container">
           <h4>{editingMaterial ? 'Editar Material' : 'Nuevo Material'}</h4>
           <form className="material-form" onSubmit={handleSave}>
-            <div className="form-group image-upload-section">
-              <label>Imagen del Material</label>
-              <div className="preview-container">
-                {formData.image_url ? (
-                  <img src={formData.image_url} alt="Vista previa" className="form-image-preview" />
-                ) : (
-                  <div className="no-image">
-                    {uploadStatus === 'UPLOADING' ? '☁️ Subiendo...' : 'Sin imagen seleccionada'}
-                  </div>
-                )}
+            <div className="form-group status-group-highlight" style={{ textAlign: 'center' }}>
+              <div className="preview-container" style={{ margin: '0 auto 1rem' }}>
+                {formData.image_url ? <img src={formData.image_url} alt="" className="form-image-preview" /> : <div className="no-image">Cámara Lista</div>}
               </div>
               
-              <div className="upload-controls">
-                <input 
-                  type="file" accept="image/*" capture="environment" 
-                  onChange={handleFileUpload} 
-                  disabled={uploadStatus === 'UPLOADING'} 
-                  id="camera-input-mat" style={{ display: 'none' }}
-                />
-                <label htmlFor="camera-input-mat" className="btn-primary" style={{ backgroundColor: 'var(--secondary-color)', marginBottom: '1rem' }}>
-                  {uploadStatus === 'UPLOADING' ? 'Cargando...' : '📷 Tomar Foto / Galería'}
-                </label>
-              </div>
-
-              {uploadStatus === 'SUCCESS' && <p style={{ color: '#10b981', fontSize: '0.9rem', textAlign: 'center', fontWeight: 'bold' }}>✅ Imagen cargada</p>}
-              {uploadStatus === 'ERROR' && <p style={{ color: '#ef4444', fontSize: '0.9rem', textAlign: 'center', fontWeight: 'bold' }}>❌ Error: {errorMessage}</p>}
+              <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} id="cam-mat" style={{ display: 'none' }} disabled={uploading} />
+              <label htmlFor="cam-mat" className="btn-primary" style={{ backgroundColor: 'var(--secondary-color)', display: 'inline-flex', width: 'auto', padding: '15px 30px' }}>
+                {uploading ? '⏳ SUBIENDO...' : '📸 USAR CÁMARA'}
+              </label>
+              
+              {debugLog && <p style={{ marginTop: '10px', fontSize: '0.8rem', fontWeight: 'bold', color: debugLog.includes('❌') ? '#ef4444' : '#3498db' }}>{debugLog}</p>}
             </div>
 
-            <div className="form-group">
-              <label>Descripción</label>
-              <input type="text" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Ej: Perfil C 100x50" required className="form-input" />
-            </div>
+            <div className="form-group"><label>Descripción</label><input type="text" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required className="form-input" /></div>
             <div className="form-row">
-              <div className="form-group">
-                <label>Unidad</label>
-                <select value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} className="form-input">
-                  <option value="unidades">Unidades</option><option value="kg">kg</option><option value="metros">Metros</option><option value="planchas">Planchas</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Cantidad</label>
-                <input type="number" step="0.01" value={formData.quantity} onChange={e => setFormData({...formData, quantity: parseFloat(e.target.value)})} required className="form-input" />
-              </div>
+              <div className="form-group"><label>Unidad</label><select value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} className="form-input"><option value="unidades">Unidades</option><option value="kg">kg</option><option value="metros">Metros</option><option value="planchas">Planchas</option></select></div>
+              <div className="form-group"><label>Cantidad</label><input type="number" step="0.01" value={formData.quantity} onChange={e => setFormData({...formData, quantity: parseFloat(e.target.value)})} required className="form-input" /></div>
             </div>
-            <div className="form-group">
-              <label>Stock Mínimo</label>
-              <input type="number" step="0.01" value={formData.min_stock} onChange={e => setFormData({...formData, min_stock: parseFloat(e.target.value)})} required className="form-input" />
-            </div>
+            <div className="form-group"><label>Stock Mínimo</label><input type="number" step="0.01" value={formData.min_stock} onChange={e => setFormData({...formData, min_stock: parseFloat(e.target.value)})} required className="form-input" /></div>
+            
             <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={() => navigate('/material-inventory')}>Cancelar</button>
-              <button type="submit" className="btn-primary" disabled={loading || uploadStatus === 'UPLOADING'}>
-                {loading ? 'Guardando...' : 'Guardar Cambios'}
-              </button>
+              <button type="button" className="btn-secondary" onClick={() => { localStorage.removeItem(routeId ? `draft_mat_${routeId}` : 'draft_mat_new'); navigate('/material-inventory'); }}>Cancelar</button>
+              <button type="submit" className="btn-primary" disabled={loading || uploading}>Guardar Cambios</button>
             </div>
           </form>
         </div>
