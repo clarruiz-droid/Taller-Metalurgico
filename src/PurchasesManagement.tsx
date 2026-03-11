@@ -118,7 +118,6 @@ const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       {!showForm ? (
         <>
-          {/* BARRA DE BÚSQUEDA Y FILTROS */}
           <div className="search-bar">
             <input 
               type="text" 
@@ -140,29 +139,30 @@ const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             {filteredPurchases.length === 0 && !loading && <p className="empty-msg">No hay compras que coincidan con los filtros.</p>}
             {filteredPurchases.map(p => (
               <div key={p.id} className="material-card">
-              <div className="material-info">
-                <div className="tool-header">
-                  <h4>{p.supplier_name}</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
-                    <span className="price-tag">${Number(p.total_amount).toLocaleString()}</span>
-                    <span className="status-badge" style={{ backgroundColor: getStatusColor(p.status), color: 'white', fontSize: '0.65rem', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
-                      {PURCHASE_STATUS_LABELS[p.status]}
-                    </span>
+                <div className="material-info">
+                  <div className="tool-header">
+                    <h4>{p.supplier_name}</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                      <span className="price-tag">${Number(p.total_amount).toLocaleString()}</span>
+                      <span className="status-badge" style={{ backgroundColor: getStatusColor(p.status), color: 'white', fontSize: '0.65rem', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
+                        {PURCHASE_STATUS_LABELS[p.status]}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="user-id">📅 {new Date(p.purchase_date).toLocaleDateString()}</p>
+                  <div className="selected-items-list" style={{ marginTop: '0.5rem' }}>
+                    {p.items.map((item, idx) => (
+                      <span key={idx} className="item-chip view-mode">
+                        {item.description} <span className="chip-qty-view">x{item.quantity}</span>
+                      </span>
+                    ))}
                   </div>
                 </div>
-                <p className="user-id">📅 {new Date(p.purchase_date).toLocaleDateString()}</p>
-                <div className="selected-items-list" style={{ marginTop: '0.5rem' }}>
-                  {p.items.map((item, idx) => (
-                    <span key={idx} className="item-chip view-mode">
-                      {item.description} <span className="chip-qty-view">x{item.quantity}</span>
-                    </span>
-                  ))}
-                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
           <button className="btn-fab" onClick={() => setShowForm(true)}>+</button>
-        </div>
+        </>
       ) : (
         <div className="material-form-container">
           <form className="material-form" onSubmit={handleSave}>
