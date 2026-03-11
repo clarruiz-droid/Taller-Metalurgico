@@ -27,3 +27,14 @@ export const deleteLocalImage = async (key: string) => {
   const db = await initDB();
   await db.delete(STORE_NAME, key);
 };
+
+// Funciones para múltiples imágenes (Arrays de Blobs)
+export const saveLocalImageArray = async (key: string, blobs: Blob[]) => {
+  const db = await initDB();
+  await db.put(STORE_NAME, blobs, key);
+};
+
+export const getLocalImageArray = async (key: string): Promise<Blob[] | null> => {
+  const db = await initDB();
+  return db.get(STORE_NAME, key);
+};
