@@ -144,7 +144,7 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
         const fileExt = file.name.split('.').pop() || 'jpg';
         const fileName = `work-orders/${editingOrder.id}/${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
         
-        const { data, error } = await supabase.storage
+        const { error } = await supabase.storage
           .from('presupuestos')
           .upload(fileName, file, {
             cacheControl: '3600',
