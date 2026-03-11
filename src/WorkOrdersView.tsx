@@ -140,40 +140,60 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileName = `work-orders/${editingOrder.id}/${Date.now()}-${file.name}`;
+        // Generamos un nombre seguro: marca de tiempo + random + extension original o jpg
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const fileName = `work-orders/${editingOrder.id}/${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
+        
         const { data, error } = await supabase.storage
           .from('presupuestos')
-          .upload(fileName, file);
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error subiendo al storage:', error);
+          throw new Error(`Error en Storage: ${error.message}`);
+        }
 
         const { data: { publicUrl } } = supabase.storage
           .from('presupuestos')
-          .getPublicUrl(data.path);
+          .getPublicUrl(fileName);
 
-        uploadedUrls.push(publicUrl);
+        if (publicUrl) {
+          uploadedUrls.push(publicUrl);
+        }
       }
 
-      // Actualizar el estado de forma segura
-      setFormData(prev => {
-        const newImages = [...(prev.images || []), ...uploadedUrls];
-        
-        // Guardar en la base de datos de inmediato para evitar pérdida en móviles
-        supabase.from('ordenes_trabajo')
-          .update({ images: newImages })
-          .eq('id', editingOrder.id)
-          .then(({ error }) => {
-            if (!error) logChange(editingOrder.id, 'MODIFICACION', 'Se subieron nuevas fotos del progreso');
-          });
+      if (uploadedUrls.length > 0) {
+        // 1. Calculamos la nueva lista completa de imágenes
+        const currentImages = formData.images || [];
+        const updatedImages = [...currentImages, ...uploadedUrls];
 
-        return { ...prev, images: newImages };
-      });
+        // 2. Guardamos en la base de datos de inmediato (Crítico para móviles)
+        const { error: updateError } = await supabase.from('ordenes_trabajo')
+          .update({ images: updatedImages })
+          .eq('id', editingOrder.id);
+
+        if (updateError) {
+          console.error('Error actualizando tabla ordenes:', updateError);
+          throw new Error(`Error en DB: ${updateError.message}`);
+        }
+
+        // 3. Actualizamos el estado local para que el usuario las vea
+        setFormData(prev => ({ ...prev, images: updatedImages }));
+        
+        // 4. Registramos en el historial
+        await logChange(editingOrder.id, 'MODIFICACION', `Se subieron ${uploadedUrls.length} fotos nuevas`);
+        
+        alert('Fotos guardadas correctamente');
+      }
       
-      // Limpiar el input para permitir subir la misma foto si se borró
-      e.target.value = '';
+      e.target.value = ''; // Reset input
 
     } catch (error: any) {
-      alert('Error al subir imágenes: ' + error.message);
+      console.error('Fallo completo en carga de imágenes:', error);
+      alert('Fallo al subir: ' + error.message);
     } finally {
       setLoading(false);
     }
