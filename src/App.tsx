@@ -219,13 +219,13 @@ function App() {
 
           <Route path="/work-orders" element={
             <ProtectedRoute>
-              <WorkOrdersView onBack={() => navigate('/dashboard')} currentUser={currentUser} />
+              <WorkOrdersView currentUser={currentUser} />
             </ProtectedRoute>
           } />
 
           <Route path="/work-orders/edit/:id" element={
             <ProtectedRoute>
-              <WorkOrdersView onBack={() => navigate('/work-orders')} currentUser={currentUser} />
+              <WorkOrdersView currentUser={currentUser} />
             </ProtectedRoute>
           } />
 
@@ -246,7 +246,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>&copy; 2026 Taller Metalúrgico - v1.13.0</p>
+        <p>&copy; 2026 Taller Metalúrgico - v1.13.1</p>
       </footer>
     </div>
   )

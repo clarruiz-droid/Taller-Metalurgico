@@ -139,7 +139,7 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
               <div key={m.id} className="material-card">
                 <div className="material-img">{m.image_url ? <img src={m.image_url} alt="" /> : <div className="img-placeholder">📦</div>}</div>
                 <div className="material-info"><h4>{m.description}</h4><span className={`stock-badge ${Number(m.quantity) <= Number(m.min_stock) ? 'low-stock' : 'ok-stock'}`}>{m.quantity} {m.unit}</span></div>
-                <div className="material-actions">{canEditRole && <button className="btn-action" onClick={() => navigate(`/material-inventory/edit/${m.id}`)}>✎</button>}</div>
+                <div className="material-actions">{canEditRole && (<><button className="btn-action" onClick={() => navigate(`/material-inventory/edit/${m.id}`)}>✎</button><button className="btn-action btn-delete" onClick={() => handleDelete(m.id)}>🗑</button></>)}</div>
               </div>
             ))}
           </div>

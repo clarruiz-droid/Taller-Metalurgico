@@ -6,11 +6,10 @@ import { WORK_ORDER_STATUS_LABELS } from './types';
 import './WorkOrders.css';
 
 interface WorkOrdersViewProps {
-  onBack: () => void;
   currentUser: User | null;
 }
 
-const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) => {
+const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ currentUser }) => {
   const { id: routeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
@@ -48,7 +47,6 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
       const { data } = await supabase.from('ordenes_trabajo').select('*').eq('id', routeId).single();
       if (data) {
         setEditingOrder(data);
-        // Borrador local para proteger fotos tomadas
         const draft = localStorage.getItem(`draft_wo_${routeId}`);
         if (draft) setFormData(JSON.parse(draft));
         else setFormData(data);
@@ -108,11 +106,8 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
         const updatedImages = [...(prev.images || []), newUrl];
         const newState = { ...prev, images: updatedImages };
         localStorage.setItem(`draft_wo_${editingOrder.id}`, JSON.stringify(newState));
-        
-        // Persistencia inmediata en DB para seguridad extra
         supabase.from('ordenes_trabajo').update({ images: updatedImages }).eq('id', editingOrder.id).then();
         logChange(editingOrder.id, 'MODIFICACION', 'Se subió una nueva foto');
-        
         return newState;
       });
       setUploadLog('✅ ¡Lista!');
@@ -125,7 +120,7 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
     setLoading(true);
     try {
       const dataToSave: any = { ...formData };
-      delete dataToSave.assigned_to_name; // Limpiar campos calculados
+      delete dataToSave.assigned_to_name;
 
       if (editingOrder) {
         if (formData.status === 'FINALIZADO' && !editingOrder.stock_discounted && formData.budget_id) {
@@ -156,22 +151,27 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
 
   return (
     <div className="inventory-view">
-      <header className="view-header"><button className="btn-back" onClick={() => navigate(routeId ? '/work-orders' : '/dashboard')}>← Volver</button><h3>{routeId ? 'Detalle de Orden' : 'Órdenes de Trabajo'}</h3></header>
+      <header className="view-header">
+        <button className="btn-back" onClick={() => navigate(routeId ? '/work-orders' : '/dashboard')}>← Volver</button>
+        <h3>{routeId ? 'Detalle de Orden' : 'Órdenes de Trabajo'}</h3>
+      </header>
 
       {!routeId ? (
         <>
           <div className="search-bar"><input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="form-input" /></div>
           <div className="filter-tabs budget-filters" style={{ marginBottom: '1.5rem' }}>
-            <button className={`filter-tab ${statusFilter === 'ALL' ? 'active' : ''}`} onClick={() => setStatusFilter('ALL')}>Todas</button>
-            <button className={`filter-tab ${statusFilter === 'PENDIENTE' ? 'active' : ''}`} onClick={() => setStatusFilter('PENDIENTE')}>Pendientes</button>
-            <button className={`filter-tab ${statusFilter === 'PROCESO' ? 'active' : ''}`} onClick={() => setStatusFilter('PROCESO')}>En Proceso</button>
-            <button className={`filter-tab ${statusFilter === 'FINALIZADO' ? 'active' : ''}`} onClick={() => setStatusFilter('FINALIZADO')}>Finalizadas</button>
+            {['ALL', 'PENDIENTE', 'PROCESO', 'FINALIZADO'].map(s => (
+              <button key={s} className={`filter-tab ${statusFilter === s ? 'active' : ''}`} onClick={() => setStatusFilter(s as any)}>{s === 'ALL' ? 'Todas' : WORK_ORDER_STATUS_LABELS[s as WorkOrderStatus]}</button>
+            ))}
           </div>
           <div className="material-list">
             {filteredOrders.map(wo => (
               <div key={wo.id} className="material-card wo-card clickable" onClick={() => navigate(`/work-orders/edit/${wo.id}`)}>
                 <div className="wo-priority-indicator" style={{ backgroundColor: wo.priority === 'ALTA' ? '#ef4444' : wo.priority === 'MEDIA' ? '#f59e0b' : '#3498db' }}></div>
-                <div className="material-info"><div className="tool-header"><h4>{wo.client_name}</h4><span className={`status-badge status-${wo.status.toLowerCase()}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span></div><p className="wo-desc">{wo.description}</p></div>
+                <div className="material-info">
+                  <div className="tool-header"><h4>{wo.client_name}</h4><span className={`status-badge status-${wo.status.toLowerCase()}`}>{WORK_ORDER_STATUS_LABELS[wo.status]}</span></div>
+                  <p className="wo-desc">{wo.description}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -189,6 +189,28 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
             </div>
             <div className="form-group"><label>Cliente</label><input type="text" value={formData.client_name} onChange={e => setFormData({...formData, client_name: e.target.value})} required className="form-input" /></div>
             <div className="form-group"><label>Descripción</label><textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required className="form-input" rows={3} /></div>
+
+            {budgetInfo && (
+              <div className="form-group status-group-highlight" style={{ backgroundColor: 'rgba(52, 152, 219, 0.03)', borderStyle: 'solid' }}>
+                <label style={{ color: 'var(--primary-color)', fontSize: '0.75rem' }}>🛠️ Planificado en Presupuesto</label>
+                <div style={{ marginTop: '0.75rem' }}>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>MATERIALES:</p>
+                  <div className="selected-items-list">
+                    {budgetInfo.materials?.map((m, idx) => (<span key={idx} className="item-chip view-mode">{m.description} <span className="chip-qty-view">x{m.quantity}</span></span>))}
+                  </div>
+                </div>
+                <div style={{ marginTop: '1rem' }}>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>HERRAMIENTAS:</p>
+                  <div className="selected-items-list">
+                    {budgetInfo.tools?.map((toolId, idx) => {
+                      const toolName = allTools.find(t => t.id === toolId)?.description || 'Desconocida';
+                      return <span key={idx} className="tool-chip">{toolName}</span>;
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="form-row">
               <div className="form-group"><label>Prioridad</label><select value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})} className="form-input"><option value="BAJA">Baja</option><option value="MEDIA">Media</option><option value="ALTA">Alta</option></select></div>
               <div className="form-group"><label>Estado</label><select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="form-input"><option value="PENDIENTE">Pendiente</option><option value="PROCESO">En Proceso</option><option value="FINALIZADO">Finalizado</option></select></div>
@@ -199,6 +221,29 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
             </div>
             <div className="form-actions"><button type="button" className="btn-secondary" onClick={() => navigate('/work-orders')}>Cancelar</button><button type="submit" className="btn-primary" disabled={loading}>Guardar Cambios</button></div>
           </form>
+
+          {currentUser?.role !== 'OPERARIO' && (
+            <div className="history-section">
+              <header className="history-toggle-header" onClick={() => setShowHistory(!showHistory)} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}>
+                <h4>📜 Historial de Cambios</h4>
+                <span style={{ color: 'var(--primary-color)', fontWeight: 'bold' }}>{showHistory ? '▲ Ocultar' : '▼ Ver'}</span>
+              </header>
+              {showHistory && (
+                <div className="history-timeline" style={{ marginTop: '1rem' }}>
+                  {history.map(log => (
+                    <div key={log.id} className="history-item">
+                      <div className="history-dot"></div>
+                      <div className="history-content">
+                        <div className="history-header"><strong>{log.user_name}</strong><span className="history-time">{new Date(log.created_at).toLocaleString()}</span></div>
+                        <div className="history-action-badge">{log.action}</div>
+                        <p className="history-details">{log.details}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
