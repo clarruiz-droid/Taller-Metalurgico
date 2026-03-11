@@ -81,7 +81,13 @@ const PurchasesManagement: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
       alert('Compra registrada y stock actualizado');
       setShowForm(false);
-      setFormData({ supplier_id: '', purchase_date: new Date().toISOString().split('T')[0], items: [], observations: '' });
+      setFormData({ 
+        supplier_id: '', 
+        purchase_date: new Date().toISOString().split('T')[0], 
+        items: [], 
+        observations: '',
+        status: 'PAGADA'
+      });
       await fetchData();
     } catch (error: any) {
       alert('Error: ' + error.message);
