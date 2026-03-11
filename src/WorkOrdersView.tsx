@@ -119,28 +119,60 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
       setLoading(false);
     }
   };
+const handleSave = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  try {
+    const dataToSave: any = {
+      client_name: formData.client_name,
+      description: formData.description,
+      status: formData.status,
+      priority: formData.priority,
+      estimated_end_date: formData.estimated_end_date,
+      assigned_to: formData.assigned_to || null,
+      observations: formData.observations,
+      budget_id: formData.budget_id,
+      images: formData.images || []
+    };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const dataToSave = {
-        client_name: formData.client_name,
-        description: formData.description,
-        status: formData.status,
-        priority: formData.priority,
-        estimated_end_date: formData.estimated_end_date,
-        assigned_to: formData.assigned_to || null,
-        observations: formData.observations,
-        budget_id: formData.budget_id,
-        images: formData.images || []
-      };
+    if (editingOrder) {
+      // LÓGICA DE DESCUENTO DE STOCK
+      if (formData.status === 'FINALIZADO' && !editingOrder.stock_discounted && formData.budget_id) {
+        if (window.confirm('La orden se marcará como FINALIZADA. ¿Desea descontar automáticamente los materiales del presupuesto del stock actual?')) {
 
-      if (editingOrder) {
-        const { error } = await supabase.from('ordenes_trabajo').update(dataToSave).eq('id', editingOrder.id);
-        if (error) throw error;
-        
-        // Detectar cambios detallados para el historial
+          // 1. Obtener materiales del presupuesto
+          const { data: budgetData } = await supabase
+            .from('presupuestos')
+            .select('materials')
+            .eq('id', formData.budget_id)
+            .single();
+
+          if (budgetData?.materials) {
+            // 2. Descontar cada material
+            for (const item of budgetData.materials) {
+              // Obtener stock actual
+              const { data: matData } = await supabase
+                .from('materiales')
+                .select('quantity')
+                .eq('id', item.id)
+                .single();
+
+              if (matData) {
+                const newQty = Math.max(0, Number(matData.quantity) - Number(item.quantity));
+                await supabase.from('materiales').update({ quantity: newQty }).eq('id', item.id);
+              }
+            }
+            dataToSave.stock_discounted = true;
+            alert('Materiales descontados del stock correctamente');
+          }
+        }
+      }
+
+      const { error } = await supabase.from('ordenes_trabajo').update(dataToSave).eq('id', editingOrder.id);
+      if (error) throw error;
+
+      // Detectar cambios detallados para el historial
+...
         const changes: string[] = [];
         const fieldLabels: Record<string, string> = {
           status: 'Estado',

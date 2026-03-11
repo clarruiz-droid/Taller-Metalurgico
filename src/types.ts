@@ -103,6 +103,7 @@ export interface WorkOrder {
   priority: WorkOrderPriority;
   observations?: string;
   images?: string[];
+  stock_discounted?: boolean;
 }
 
 export interface PurchaseItem {
