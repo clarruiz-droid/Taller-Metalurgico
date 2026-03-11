@@ -99,7 +99,7 @@ const ToolInventory: React.FC<{ onBack: () => void; currentUser: User | null }> 
         .getPublicUrl(filePath);
 
       setFormData({ ...formData, image_url: data.publicUrl });
-      alert('Imagen de herramienta optimizada');
+      // Eliminado alert bloqueante
     } catch (error: any) {
       alert('Error subiendo imagen: ' + error.message);
     } finally {
