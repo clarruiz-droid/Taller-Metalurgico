@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { WorkOrder, User, WorkOrderHistory, Tool } from './types';
 import { supabase } from './lib/supabase';
 import { WORK_ORDER_STATUS_LABELS } from './types';
@@ -10,6 +11,9 @@ interface WorkOrdersViewProps {
 }
 
 const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) => {
+  const { id: routeId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [allTools, setAllTools] = useState<Tool[]>([]);
@@ -17,7 +21,6 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
   const [history, setHistory] = useState<WorkOrderHistory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
 
   const [formData, setFormData] = useState<Partial<WorkOrder>>({
@@ -32,11 +35,21 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
   });
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    init();
+  }, [routeId]);
+
+  const init = async () => {
+    setLoading(true);
+    await fetchData();
+    if (routeId) {
+      await loadSingleOrder(routeId);
+    } else {
+      setEditingOrder(null);
+    }
+    setLoading(false);
+  };
 
   const fetchData = async () => {
-    setLoading(true);
     try {
       const [woRes, uRes, tRes] = await Promise.all([
         supabase.from('ordenes_trabajo').select('*, profiles:assigned_to(full_name)').order('created_at', { ascending: false }),
@@ -66,8 +79,33 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
       if (!tRes.error) setAllTools(tRes.data || []);
     } catch (err) {
       console.error('Error cargando datos:', err);
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const loadSingleOrder = async (id: string) => {
+    const { data, error } = await supabase
+      .from('ordenes_trabajo')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (!error && data) {
+      setEditingOrder(data);
+      setFormData(data);
+      fetchHistory(id);
+      if (data.budget_id) fetchBudgetDetails(data.budget_id);
+    }
+  };
+
+  const fetchBudgetDetails = async (budgetId: number) => {
+    const { data, error } = await supabase
+      .from('presupuestos')
+      .select('materials, tools')
+      .eq('id', budgetId)
+      .single();
+    
+    if (!error && data) {
+      setBudgetInfo(data);
     }
   };
 
@@ -116,9 +154,7 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
       }
 
       setFormData({ ...formData, images: newImages });
-      await supabase.from('ordenes_trabajo').update({ images: newImages }).eq('id', editingOrder.id);
-      await logChange(editingOrder.id, 'MODIFICACION', 'Se añadieron fotos del trabajo');
-      alert('Imágenes subidas con éxito');
+      // NOTA: No guardamos en DB aquí, solo en el estado. Se guarda al final con handleSave.
     } catch (error: any) {
       alert('Error al subir imágenes: ' + error.message);
     } finally {
@@ -154,19 +190,13 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
 
             if (budgetData?.materials) {
               for (const item of budgetData.materials) {
-                const { data: matData } = await supabase
-                  .from('materiales')
-                  .select('quantity')
-                  .eq('id', item.id)
-                  .single();
-                
+                const { data: matData } = await supabase.from('materiales').select('quantity').eq('id', item.id).single();
                 if (matData) {
                   const newQty = Math.max(0, Number(matData.quantity) - Number(item.quantity));
                   await supabase.from('materiales').update({ quantity: newQty }).eq('id', item.id);
                 }
               }
               dataToSave.stock_discounted = true;
-              alert('Materiales descontados del stock correctamente');
             }
           }
         }
@@ -176,31 +206,29 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
         
         const changes: string[] = [];
         const fieldLabels: Record<string, string> = {
-          status: 'Estado',
-          priority: 'Prioridad',
-          assigned_to: 'Asignación',
-          client_name: 'Cliente',
-          description: 'Descripción',
-          estimated_end_date: 'Fecha Entrega',
-          observations: 'Observaciones'
+          status: 'Estado', priority: 'Prioridad', assigned_to: 'Asignación',
+          client_name: 'Cliente', description: 'Descripción',
+          estimated_end_date: 'Fecha Entrega', observations: 'Observaciones',
+          images: 'Fotos'
         };
-(Object.keys(dataToSave) as string[]).forEach(key => {
-  const oldVal = editingOrder[key as keyof WorkOrder];
-  const newVal = dataToSave[key];
 
-  if (oldVal !== newVal) {
-    const label = fieldLabels[key] || key;
-
-    // Formateo especial para asignación (nombres en lugar de IDs)
-    if (key === 'assigned_to') {
-      const oldUser = users.find(u => u.id === (oldVal as string))?.name || 'Sin asignar';
-      const newUser = users.find(u => u.id === (newVal as string))?.name || 'Sin asignar';
-      changes.push(`${String(label)}: [${oldUser}] ➔ [${newUser}]`);
-    } else {
-      changes.push(`${String(label)}: [${String(oldVal || 'Vacío')}] ➔ [${String(newVal || 'Vacío')}]`);
-    }
-  }
-});
+        (Object.keys(dataToSave) as string[]).forEach(key => {
+          const oldVal = editingOrder[key as keyof WorkOrder];
+          const newVal = dataToSave[key];
+          if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+            const label = fieldLabels[key] || key;
+            if (key === 'assigned_to') {
+              const oldUser = users.find(u => u.id === (oldVal as string))?.name || 'Sin asignar';
+              const newUser = users.find(u => u.id === (newVal as string))?.name || 'Sin asignar';
+              changes.push(`${String(label)}: [${oldUser}] ➔ [${newUser}]`);
+            } else if (key === 'images') {
+              changes.push(`Fotos: Se actualizaron las imágenes del trabajo`);
+            } else {
+              changes.push(`${String(label)}: [${String(oldVal || 'Vacío')}] ➔ [${String(newVal || 'Vacío')}]`);
+            }
+          }
+        });
+        
         if (changes.length > 0) {
           await logChange(editingOrder.id, 'MODIFICACION', changes.join(' | '));
         }
@@ -211,8 +239,7 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
       }
       
       alert('Orden guardada con éxito');
-      setShowForm(false);
-      await fetchData();
+      navigate('/work-orders');
     } catch (error: any) {
       console.error('Error al guardar orden:', error);
       alert('Error: ' + (error.message || 'No se pudo guardar la orden'));
@@ -221,27 +248,8 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
     }
   };
 
-  const fetchBudgetDetails = async (budgetId: number) => {
-    const { data, error } = await supabase
-      .from('presupuestos')
-      .select('materials, tools')
-      .eq('id', budgetId)
-      .single();
-    
-    if (!error && data) {
-      setBudgetInfo(data);
-    } else {
-      setBudgetInfo(null);
-    }
-  };
-
   const openEdit = (wo: WorkOrder) => {
-    setEditingOrder(wo);
-    setFormData(wo);
-    fetchHistory(wo.id);
-    if (wo.budget_id) fetchBudgetDetails(wo.budget_id);
-    else setBudgetInfo(null);
-    setShowForm(true);
+    navigate(`/work-orders/edit/${wo.id}`);
   };
 
   const getPriorityColor = (p: string) => {
@@ -261,11 +269,11 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
   return (
     <div className="inventory-view">
       <header className="view-header">
-        <button className="btn-back" onClick={showForm ? () => setShowForm(false) : onBack}>← Volver</button>
-        <h3>{showForm ? 'Detalle de Orden' : 'Órdenes de Trabajo'}</h3>
+        <button className="btn-back" onClick={onBack}>← Volver</button>
+        <h3>{routeId ? 'Detalle de Orden' : 'Órdenes de Trabajo'}</h3>
       </header>
 
-      {!showForm ? (
+      {!routeId ? (
         <>
           <div className="search-bar">
             <input 
@@ -311,35 +319,24 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
               <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required className="form-input" rows={3} />
             </div>
 
-            {/* LISTADO DE MATERIALES Y HERRAMIENTAS PRESUPUESTADOS */}
             {budgetInfo && (
               <div className="form-group status-group-highlight" style={{ backgroundColor: 'rgba(52, 152, 219, 0.03)', borderStyle: 'solid' }}>
                 <label style={{ color: 'var(--primary-color)', fontSize: '0.75rem' }}>🛠️ Planificado en Presupuesto</label>
-                
                 <div style={{ marginTop: '0.75rem' }}>
                   <p style={{ fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.5rem', opacity: 0.8 }}>MATERIALES:</p>
                   <div className="selected-items-list">
                     {budgetInfo.materials?.map((m, idx) => (
-                      <span key={idx} className="item-chip view-mode">
-                        {m.description} <span className="chip-qty-view">x{m.quantity}</span>
-                      </span>
+                      <span key={idx} className="item-chip view-mode">{m.description} <span className="chip-qty-view">x{m.quantity}</span></span>
                     ))}
-                    {(!budgetInfo.materials || budgetInfo.materials.length === 0) && <p style={{ fontSize: '0.7rem', fontStyle: 'italic' }}>Sin materiales definidos</p>}
                   </div>
                 </div>
-
                 <div style={{ marginTop: '1rem' }}>
                   <p style={{ fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.5rem', opacity: 0.8 }}>HERRAMIENTAS:</p>
                   <div className="selected-items-list">
                     {budgetInfo.tools?.map((toolId, idx) => {
                       const toolName = allTools.find(t => t.id === toolId)?.description || 'Herramienta desconocida';
-                      return (
-                        <span key={idx} className="tool-chip">
-                          {toolName}
-                        </span>
-                      );
+                      return <span key={idx} className="tool-chip">{toolName}</span>;
                     })}
-                    {(!budgetInfo.tools || budgetInfo.tools.length === 0) && <p style={{ fontSize: '0.7rem', fontStyle: 'italic' }}>Sin herramientas definidas</p>}
                   </div>
                 </div>
               </div>
@@ -381,22 +378,17 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
               <textarea value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} className="form-input" rows={2} />
             </div>
 
-            {/* SECCIÓN DE FOTOS */}
             <div className="form-group status-group-highlight">
               <label>📸 Fotos del Trabajo</label>
               <div className="budget-images-gallery" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px', marginTop: '1rem' }}>
                 {formData.images?.map((url, idx) => (
-                  <div key={idx} className="material-img" style={{ width: '100%', height: '100px', cursor: 'pointer' }} onClick={() => window.open(url, '_blank')}>
-                    <img src={url} alt={`Trabajo ${idx}`} />
-                  </div>
+                  <div key={idx} className="material-img" style={{ width: '100%', height: '100px', cursor: 'pointer' }} onClick={() => window.open(url, '_blank')}><img src={url} alt={`Trabajo ${idx}`} /></div>
                 ))}
-                
                 <label className="menu-item" style={{ padding: '1rem', border: '2px dashed var(--border-color)', cursor: 'pointer', height: '100px', justifyContent: 'center', marginBottom: 0 }}>
                   <span className="icon" style={{ fontSize: '1.25rem' }}>🖼️</span>
                   <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>Galería</span>
                   <input type="file" multiple accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
                 </label>
-
                 <label className="menu-item" style={{ padding: '1rem', border: '2px dashed var(--primary-color)', cursor: 'pointer', height: '100px', justifyContent: 'center', marginBottom: 0, backgroundColor: 'rgba(52, 152, 219, 0.05)' }}>
                   <span className="icon" style={{ fontSize: '1.25rem' }}>📷</span>
                   <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>Cámara</span>
@@ -406,7 +398,7 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
             </div>
             
             <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
+              <button type="button" className="btn-secondary" onClick={onBack}>Cancelar</button>
               <button type="submit" className="btn-primary" disabled={loading}>Guardar Cambios</button>
             </div>
           </form>
@@ -414,23 +406,16 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
           <div className="history-section">
             <h4>📜 Historial de Cambios</h4>
             <div className="history-timeline">
-              {history.length === 0 ? (
-                <p className="empty-msg">No hay registros de cambios aún.</p>
-              ) : (
-                history.map(log => (
-                  <div key={log.id} className="history-item">
-                    <div className="history-dot"></div>
-                    <div className="history-content">
-                      <div className="history-header">
-                        <strong>{log.user_name}</strong>
-                        <span className="history-time">{new Date(log.created_at).toLocaleString()}</span>
-                      </div>
-                      <div className="history-action-badge">{log.action}</div>
-                      <p className="history-details">{log.details}</p>
-                    </div>
+              {history.map(log => (
+                <div key={log.id} className="history-item">
+                  <div className="history-dot"></div>
+                  <div className="history-content">
+                    <div className="history-header"><strong>{log.user_name}</strong><span className="history-time">{new Date(log.created_at).toLocaleString()}</span></div>
+                    <div className="history-action-badge">{log.action}</div>
+                    <p className="history-details">{log.details}</p>
                   </div>
-                ))
-              )}
+                </div>
+              ))}
             </div>
           </div>
         </div>

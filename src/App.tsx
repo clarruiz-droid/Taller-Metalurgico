@@ -199,6 +199,12 @@ function App() {
             </ProtectedRoute>
           } />
 
+          <Route path="/work-orders/edit/:id" element={
+            <ProtectedRoute>
+              <WorkOrdersView onBack={() => navigate('/work-orders')} currentUser={currentUser} />
+            </ProtectedRoute>
+          } />
+
           <Route path="/reports" element={
             <ProtectedRoute allowedRoles={['ADMIN', 'GERENTE']}>
               <ReportsView onBack={() => navigate('/dashboard')} />
@@ -216,7 +222,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>&copy; 2026 Taller Metalúrgico - v1.9.2</p>
+        <p>&copy; 2026 Taller Metalúrgico - v1.9.3</p>
       </footer>
     </div>
   )
