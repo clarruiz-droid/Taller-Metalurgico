@@ -14,7 +14,6 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState<string>(''); // Vista previa local
 
   const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'GERENTE' || currentUser?.role === 'SUPERVISOR';
@@ -74,8 +73,6 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
     if (!file) return;
 
     try {
-      setUploading(true);
-      
       // 1. Guardar en IndexedDB inmediatamente (Persistencia extrema)
       const key = routeId ? `mat_${routeId}` : 'mat_new';
       await saveLocalImage(key, file);
@@ -84,10 +81,8 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
       if (localPreview) URL.revokeObjectURL(localPreview);
       setLocalPreview(URL.createObjectURL(file));
       
-      setUploading(false);
     } catch (error: any) {
       alert('Error local: ' + error.message);
-      setUploading(false);
     }
   };
 
@@ -191,7 +186,7 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
             <div className="form-group"><label>Stock Mínimo</label><input type="number" step="0.01" value={formData.min_stock} onChange={e => setFormData({...formData, min_stock: parseFloat(e.target.value)})} required className="form-input" /></div>
             
             <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={() => navigate('/material-inventory')}>Cancelar</button>
+              <button type="button" className="btn-secondary" onClick={() => { localStorage.removeItem(isNew ? 'draft_mat_new' : `draft_mat_${routeId}`); navigate('/material-inventory'); }}>Cancelar</button>
               <button type="submit" className="btn-primary" disabled={loading}>
                 {loading ? 'Subiendo y Guardando...' : 'Guardar Cambios'}
               </button>
