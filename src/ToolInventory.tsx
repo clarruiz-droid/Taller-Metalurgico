@@ -93,8 +93,14 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
 
       const { data } = supabase.storage.from('herramientas').getPublicUrl(fileName);
       
-      setFormData(prev => ({ ...prev, image_url: data.publicUrl }));
-      alert('Imagen cargada con éxito en el formulario');
+      setFormData(prev => {
+        const newState = { ...prev, image_url: data.publicUrl };
+        // Guardamos el borrador con la nueva imagen inmediatamente
+        localStorage.setItem('draft_tool', JSON.stringify(newState));
+        return newState;
+      });
+
+      console.log('Imagen vinculada al formulario:', data.publicUrl);
     } catch (error: any) {
       console.error('Error en subida:', error);
       alert('Error al subir imagen: ' + error.message);
