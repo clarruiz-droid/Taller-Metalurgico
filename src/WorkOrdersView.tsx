@@ -21,6 +21,7 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
   const [history, setHistory] = useState<WorkOrderHistory[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | WorkOrderStatus>('ALL');
   const [loading, setLoading] = useState(true);
   const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
 
@@ -318,10 +319,12 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
     }
   };
 
-  const filteredOrders = workOrders.filter(wo => 
-    (wo.client_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-    (wo.description?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-  );
+  const filteredOrders = workOrders.filter(wo => {
+    const matchesSearch = (wo.client_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+                         (wo.description?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'ALL' || wo.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="inventory-view">
@@ -342,8 +345,15 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
             />
           </div>
 
+          <div className="filter-tabs budget-filters" style={{ marginBottom: '1.5rem' }}>
+            <button className={`filter-tab ${statusFilter === 'ALL' ? 'active' : ''}`} onClick={() => setStatusFilter('ALL')}>Todas</button>
+            <button className={`filter-tab ${statusFilter === 'PENDIENTE' ? 'active' : ''}`} onClick={() => setStatusFilter('PENDIENTE')}>Pendientes</button>
+            <button className={`filter-tab ${statusFilter === 'PROCESO' ? 'active' : ''}`} onClick={() => setStatusFilter('PROCESO')}>En Proceso</button>
+            <button className={`filter-tab ${statusFilter === 'FINALIZADO' ? 'active' : ''}`} onClick={() => setStatusFilter('FINALIZADO')}>Finalizadas</button>
+          </div>
+
           <div className="material-list">
-            {filteredOrders.length === 0 && !loading && <p className="empty-msg">No hay órdenes que coincidan con la búsqueda.</p>}
+            {filteredOrders.length === 0 && !loading && <p className="empty-msg">No hay órdenes que coincidan con los filtros.</p>}
             {filteredOrders.map(wo => (
               <div key={wo.id} className="material-card wo-card clickable" onClick={() => openEdit(wo)}>
                 <div className="wo-priority-indicator" style={{ backgroundColor: getPriorityColor(wo.priority) }}></div>
