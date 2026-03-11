@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { Material, User } from './types';
 import { supabase } from './lib/supabase';
+import { saveLocalImage, getLocalImage, deleteLocalImage } from './lib/localDb';
 import './Inventory.css';
 
 const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) => {
@@ -14,7 +15,7 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
   const [loading, setLoading] = useState(true);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [debugLog, setDebugLog] = useState('');
+  const [localPreview, setLocalPreview] = useState<string>(''); // Vista previa local
 
   const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'GERENTE' || currentUser?.role === 'SUPERVISOR';
 
@@ -33,20 +34,26 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
   const init = async () => {
     setLoading(true);
     await fetchMaterials();
+    
     if (routeId) {
       const { data } = await supabase.from('materiales').select('*').eq('id', routeId).single();
       if (data) {
         setEditingMaterial(data);
-        // Priorizar el borrador local si existe (para recuperar fotos tras refresco)
-        const draft = localStorage.getItem(`draft_mat_${routeId}`);
-        if (draft) setFormData(JSON.parse(draft));
-        else setFormData(data);
+        setFormData(data);
       }
     } else if (isNew) {
       setEditingMaterial(null);
       const draft = localStorage.getItem('draft_mat_new');
       if (draft) setFormData(JSON.parse(draft));
     }
+
+    // CARGAR IMAGEN DESDE ALMACENAMIENTO LOCAL (IndexedDB)
+    const key = routeId ? `mat_${routeId}` : 'mat_new';
+    const blob = await getLocalImage(key);
+    if (blob) {
+      setLocalPreview(URL.createObjectURL(blob));
+    }
+
     setLoading(false);
   };
 
@@ -68,49 +75,58 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
 
     try {
       setUploading(true);
-      setDebugLog('⏳ Procesando archivo...');
       
-      const fileName = `mat-${Date.now()}-${Math.floor(Math.random()*1000)}.jpg`;
-
-      setDebugLog('☁️ Subiendo a la nube...');
-      const { error: uploadError } = await supabase.storage
-        .from('presupuestos')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage.from('presupuestos').getPublicUrl(fileName);
+      // 1. Guardar en IndexedDB inmediatamente (Persistencia extrema)
+      const key = routeId ? `mat_${routeId}` : 'mat_new';
+      await saveLocalImage(key, file);
       
-      if (data?.publicUrl) {
-        setFormData(prev => ({ ...prev, image_url: data.publicUrl }));
-        setDebugLog('✅ Imagen cargada correctamente');
-      } else {
-        throw new Error('No se generó la URL pública');
-      }
-
-    } catch (error: any) {
-      console.error('Error:', error);
-      setDebugLog('❌ Error: ' + (error.message || 'Fallo de conexión'));
-      alert('Error al cargar: ' + error.message);
-    } finally {
+      // 2. Mostrar vista previa inmediata
+      if (localPreview) URL.revokeObjectURL(localPreview);
+      setLocalPreview(URL.createObjectURL(file));
+      
       setUploading(false);
-      event.target.value = '';
+    } catch (error: any) {
+      alert('Error local: ' + error.message);
+      setUploading(false);
     }
+  };
+
+  const uploadToSupabase = async (file: Blob, id: string): Promise<string> => {
+    const fileName = `mat-${id}-${Date.now()}.jpg`;
+    const { error } = await supabase.storage.from('presupuestos').upload(fileName, file);
+    if (error) throw error;
+    const { data } = supabase.storage.from('presupuestos').getPublicUrl(fileName);
+    return data.publicUrl;
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      if (editingMaterial) {
-        await supabase.from('materiales').update(formData).eq('id', editingMaterial.id);
-      } else {
-        await supabase.from('materiales').insert([formData]);
+      const key = routeId ? `mat_${routeId}` : 'mat_new';
+      const localBlob = await getLocalImage(key);
+      
+      let finalImageUrl = formData.image_url;
+
+      // 3. Subir a Supabase SOLO al presionar guardar
+      if (localBlob) {
+        finalImageUrl = await uploadToSupabase(localBlob, routeId || 'new');
       }
-      localStorage.removeItem(routeId ? `draft_mat_${routeId}` : 'draft_mat_new');
+
+      const dataToSave = { ...formData, image_url: finalImageUrl };
+
+      if (editingMaterial) {
+        await supabase.from('materiales').update(dataToSave).eq('id', editingMaterial.id);
+      } else {
+        await supabase.from('materiales').insert([dataToSave]);
+      }
+
+      // Limpiar todo tras éxito
+      await deleteLocalImage(key);
+      localStorage.removeItem(isNew ? 'draft_mat_new' : `draft_mat_${routeId}`);
       navigate('/material-inventory');
     } catch (error: any) {
-      alert('Error: ' + error.message);
+      alert('Error al guardar: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -151,15 +167,20 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
           <form className="material-form" onSubmit={handleSave}>
             <div className="form-group status-group-highlight" style={{ textAlign: 'center' }}>
               <div className="preview-container" style={{ margin: '0 auto 1rem' }}>
-                {formData.image_url ? <img src={formData.image_url} alt="" className="form-image-preview" /> : <div className="no-image">Cámara Lista</div>}
+                {(localPreview || formData.image_url) ? (
+                  <img src={localPreview || formData.image_url} alt="" className="form-image-preview" />
+                ) : (
+                  <div className="no-image">Cámara Lista</div>
+                )}
               </div>
               
-              <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} id="cam-mat" style={{ display: 'none' }} disabled={uploading} />
+              <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} id="cam-mat" style={{ display: 'none' }} />
               <label htmlFor="cam-mat" className="btn-primary" style={{ backgroundColor: 'var(--secondary-color)', display: 'inline-flex', width: 'auto', padding: '15px 30px' }}>
-                {uploading ? '⏳ SUBIENDO...' : '📸 USAR CÁMARA'}
+                📸 CAPTURAR FOTO
               </label>
-              
-              {debugLog && <p style={{ marginTop: '10px', fontSize: '0.8rem', fontWeight: 'bold', color: debugLog.includes('❌') ? '#ef4444' : '#3498db' }}>{debugLog}</p>}
+              <p style={{ marginTop: '10px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                {localPreview ? '✅ Imagen guardada en el dispositivo' : 'La foto se subirá al guardar el formulario'}
+              </p>
             </div>
 
             <div className="form-group"><label>Descripción</label><input type="text" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required className="form-input" /></div>
@@ -170,8 +191,10 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
             <div className="form-group"><label>Stock Mínimo</label><input type="number" step="0.01" value={formData.min_stock} onChange={e => setFormData({...formData, min_stock: parseFloat(e.target.value)})} required className="form-input" /></div>
             
             <div className="form-actions">
-              <button type="button" className="btn-secondary" onClick={() => { localStorage.removeItem(routeId ? `draft_mat_${routeId}` : 'draft_mat_new'); navigate('/material-inventory'); }}>Cancelar</button>
-              <button type="submit" className="btn-primary" disabled={loading || uploading}>Guardar Cambios</button>
+              <button type="button" className="btn-secondary" onClick={() => navigate('/material-inventory')}>Cancelar</button>
+              <button type="submit" className="btn-primary" disabled={loading}>
+                {loading ? 'Subiendo y Guardando...' : 'Guardar Cambios'}
+              </button>
             </div>
           </form>
         </div>
