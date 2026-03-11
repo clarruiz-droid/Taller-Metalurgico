@@ -67,9 +67,9 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
       const fileExt = file.name.split('.').pop() || 'jpg';
       const fileName = `mat-${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
 
-      // SUBIDA DIRECTA (Sin redimensionar para evitar cierres de navegador por RAM)
+      // SUBIDA DIRECTA al bucket centralizado 'presupuestos'
       const { error: uploadError } = await supabase.storage
-        .from('materiales')
+        .from('presupuestos')
         .upload(fileName, file, { 
           cacheControl: '3600',
           upsert: false
@@ -77,7 +77,7 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from('materiales').getPublicUrl(fileName);
+      const { data } = supabase.storage.from('presupuestos').getPublicUrl(fileName);
       
       if (data?.publicUrl) {
         setFormData(prev => {

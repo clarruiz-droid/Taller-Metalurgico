@@ -64,16 +64,16 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
       setErrorMessage('');
       
       const fileExt = file.name.split('.').pop() || 'jpg';
-      const fileName = `tool-${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
+      setUploadStatus('UPLOADING');
+      const fileName = `t-${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('herramientas')
+        .from('presupuestos')
         .upload(fileName, file, { cacheControl: '3600', upsert: false });
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from('herramientas').getPublicUrl(fileName);
-      
+      const { data } = supabase.storage.from('presupuestos').getPublicUrl(fileName);
       if (data?.publicUrl) {
         setFormData(prev => {
           const newState = { ...prev, image_url: data.publicUrl };
