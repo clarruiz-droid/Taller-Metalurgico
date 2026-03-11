@@ -6,6 +6,7 @@ import MaterialInventory from './MaterialInventory'
 import ToolInventory from './ToolInventory'
 import ClientManagement from './ClientManagement'
 import SupplierManagement from './SupplierManagement'
+import PurchasesManagement from './PurchasesManagement'
 import BudgetView from './BudgetView'
 import WorkOrdersView from './WorkOrdersView'
 import UserManagement from './UserManagement'
@@ -122,6 +123,12 @@ function App() {
                         <span>Proveedores</span>
                       </Link>
                     )}
+                    {currentUser && ['ADMIN', 'GERENTE'].includes(currentUser.role) && (
+                      <Link to="/purchases" className="menu-item">
+                        <span className="icon">💰</span>
+                        <span>Compras</span>
+                      </Link>
+                    )}
                     {currentUser && ['ADMIN', 'GERENTE', 'SUPERVISOR'].includes(currentUser.role) && (
                       <Link to="/budgets" className="menu-item">
                         <span className="icon">📄</span>
@@ -174,6 +181,12 @@ function App() {
             </ProtectedRoute>
           } />
 
+          <Route path="/purchases" element={
+            <ProtectedRoute allowedRoles={['ADMIN', 'GERENTE']}>
+              <PurchasesManagement onBack={() => navigate('/dashboard')} />
+            </ProtectedRoute>
+          } />
+
           <Route path="/budgets" element={
             <ProtectedRoute allowedRoles={['ADMIN', 'GERENTE', 'SUPERVISOR']}>
               <BudgetView onBack={() => navigate('/dashboard')} currentUser={currentUser} />
@@ -203,7 +216,7 @@ function App() {
       </main>
 
       <footer className="app-footer">
-        <p>&copy; 2026 Taller Metalúrgico - v1.7.1</p>
+        <p>&copy; 2026 Taller Metalúrgico - v1.8.0</p>
       </footer>
     </div>
   )

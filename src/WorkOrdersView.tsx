@@ -85,6 +85,41 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
     }]);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !editingOrder) return;
+
+    setLoading(true);
+    try {
+      const newImages = [...(formData.images || [])];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileName = `work-orders/${editingOrder.id}/${Date.now()}-${file.name}`;
+        const { data, error } = await supabase.storage
+          .from('presupuestos')
+          .upload(fileName, file);
+
+        if (error) throw error;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('presupuestos')
+          .getPublicUrl(data.path);
+
+        newImages.push(publicUrl);
+      }
+
+      setFormData({ ...formData, images: newImages });
+      await supabase.from('ordenes_trabajo').update({ images: newImages }).eq('id', editingOrder.id);
+      await logChange(editingOrder.id, 'MODIFICACION', 'Se añadieron fotos del trabajo');
+      alert('Imágenes subidas con éxito');
+    } catch (error: any) {
+      alert('Error al subir imágenes: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -97,7 +132,8 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
         estimated_end_date: formData.estimated_end_date,
         assigned_to: formData.assigned_to || null,
         observations: formData.observations,
-        budget_id: formData.budget_id
+        budget_id: formData.budget_id,
+        images: formData.images || []
       };
 
       if (editingOrder) {
@@ -261,6 +297,22 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
             <div className="form-group">
               <label>Observaciones / Notas</label>
               <textarea value={formData.observations} onChange={e => setFormData({...formData, observations: e.target.value})} className="form-input" rows={2} />
+            </div>
+
+            {/* SECCIÓN DE FOTOS */}
+            <div className="form-group status-group-highlight">
+              <label>📸 Fotos del Trabajo</label>
+              <div className="budget-images-gallery" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '10px', marginTop: '1rem' }}>
+                {formData.images?.map((url, idx) => (
+                  <div key={idx} className="material-img" style={{ width: '100%', height: '100px', cursor: 'pointer' }} onClick={() => window.open(url, '_blank')}>
+                    <img src={url} alt={`Trabajo ${idx}`} />
+                  </div>
+                ))}
+                <label className="menu-item" style={{ padding: '1rem', border: '2px dashed var(--border-color)', cursor: 'pointer', height: '100px', justifyContent: 'center', marginBottom: 0 }}>
+                  <span className="icon" style={{ fontSize: '1.5rem' }}>➕</span>
+                  <input type="file" multiple accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                </label>
+              </div>
             </div>
             
             <div className="form-actions">

@@ -102,6 +102,25 @@ export interface WorkOrder {
   status: WorkOrderStatus;
   priority: WorkOrderPriority;
   observations?: string;
+  images?: string[];
+}
+
+export interface PurchaseItem {
+  material_id: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+}
+
+export interface Purchase {
+  id: string;
+  supplier_id: string;
+  supplier_name?: string;
+  purchase_date: string;
+  total_amount: number;
+  items: PurchaseItem[];
+  observations?: string;
+  created_at: string;
 }
 
 export interface WorkOrderHistory {
