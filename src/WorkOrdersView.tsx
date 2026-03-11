@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import type { WorkOrder, User, WorkOrderHistory, Tool } from './types';
+import type { WorkOrder, User, WorkOrderHistory, Tool, WorkOrderStatus } from './types';
 import { supabase } from './lib/supabase';
 import { WORK_ORDER_STATUS_LABELS } from './types';
 import './WorkOrders.css';
