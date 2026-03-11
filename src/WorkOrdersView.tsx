@@ -187,14 +187,15 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
         // 4. Registramos en el historial
         await logChange(editingOrder.id, 'MODIFICACION', `Se subieron ${uploadedUrls.length} fotos nuevas`);
         
-        alert('Fotos guardadas correctamente');
+        // Eliminado alert() bloqueante para evitar cierres de app en móviles
       }
       
       e.target.value = ''; // Reset input
 
     } catch (error: any) {
       console.error('Fallo completo en carga de imágenes:', error);
-      alert('Fallo al subir: ' + error.message);
+      // Solo alert en caso de error crítico
+      alert('Error técnico al subir: ' + error.message);
     } finally {
       setLoading(false);
     }
