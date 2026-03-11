@@ -25,7 +25,8 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
     priority: 'MEDIA',
     estimated_end_date: '',
     assigned_to: '',
-    observations: ''
+    observations: '',
+    images: []
   });
 
   useEffect(() => {
@@ -119,60 +120,55 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
       setLoading(false);
     }
   };
-const handleSave = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
-  try {
-    const dataToSave: any = {
-      client_name: formData.client_name,
-      description: formData.description,
-      status: formData.status,
-      priority: formData.priority,
-      estimated_end_date: formData.estimated_end_date,
-      assigned_to: formData.assigned_to || null,
-      observations: formData.observations,
-      budget_id: formData.budget_id,
-      images: formData.images || []
-    };
 
-    if (editingOrder) {
-      // LÓGICA DE DESCUENTO DE STOCK
-      if (formData.status === 'FINALIZADO' && !editingOrder.stock_discounted && formData.budget_id) {
-        if (window.confirm('La orden se marcará como FINALIZADA. ¿Desea descontar automáticamente los materiales del presupuesto del stock actual?')) {
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const dataToSave: any = {
+        client_name: formData.client_name,
+        description: formData.description,
+        status: formData.status,
+        priority: formData.priority,
+        estimated_end_date: formData.estimated_end_date,
+        assigned_to: formData.assigned_to || null,
+        observations: formData.observations,
+        budget_id: formData.budget_id,
+        images: formData.images || []
+      };
 
-          // 1. Obtener materiales del presupuesto
-          const { data: budgetData } = await supabase
-            .from('presupuestos')
-            .select('materials')
-            .eq('id', formData.budget_id)
-            .single();
+      if (editingOrder) {
+        // LÓGICA DE DESCUENTO DE STOCK
+        if (formData.status === 'FINALIZADO' && !editingOrder.stock_discounted && formData.budget_id) {
+          if (window.confirm('La orden se marcará como FINALIZADA. ¿Desea descontar automáticamente los materiales del presupuesto del stock actual?')) {
+            const { data: budgetData } = await supabase
+              .from('presupuestos')
+              .select('materials')
+              .eq('id', formData.budget_id)
+              .single();
 
-          if (budgetData?.materials) {
-            // 2. Descontar cada material
-            for (const item of budgetData.materials) {
-              // Obtener stock actual
-              const { data: matData } = await supabase
-                .from('materiales')
-                .select('quantity')
-                .eq('id', item.id)
-                .single();
-
-              if (matData) {
-                const newQty = Math.max(0, Number(matData.quantity) - Number(item.quantity));
-                await supabase.from('materiales').update({ quantity: newQty }).eq('id', item.id);
+            if (budgetData?.materials) {
+              for (const item of budgetData.materials) {
+                const { data: matData } = await supabase
+                  .from('materiales')
+                  .select('quantity')
+                  .eq('id', item.id)
+                  .single();
+                
+                if (matData) {
+                  const newQty = Math.max(0, Number(matData.quantity) - Number(item.quantity));
+                  await supabase.from('materiales').update({ quantity: newQty }).eq('id', item.id);
+                }
               }
+              dataToSave.stock_discounted = true;
+              alert('Materiales descontados del stock correctamente');
             }
-            dataToSave.stock_discounted = true;
-            alert('Materiales descontados del stock correctamente');
           }
         }
-      }
 
-      const { error } = await supabase.from('ordenes_trabajo').update(dataToSave).eq('id', editingOrder.id);
-      if (error) throw error;
-
-      // Detectar cambios detallados para el historial
-...
+        const { error } = await supabase.from('ordenes_trabajo').update(dataToSave).eq('id', editingOrder.id);
+        if (error) throw error;
+        
         const changes: string[] = [];
         const fieldLabels: Record<string, string> = {
           status: 'Estado',
@@ -183,25 +179,23 @@ const handleSave = async (e: React.FormEvent) => {
           estimated_end_date: 'Fecha Entrega',
           observations: 'Observaciones'
         };
+(Object.keys(dataToSave) as string[]).forEach(key => {
+  const oldVal = editingOrder[key as keyof WorkOrder];
+  const newVal = dataToSave[key];
 
-        (Object.keys(dataToSave) as Array<keyof typeof dataToSave>).forEach(key => {
-          const oldVal = editingOrder[key as keyof WorkOrder];
-          const newVal = dataToSave[key];
+  if (oldVal !== newVal) {
+    const label = fieldLabels[key] || key;
 
-          if (oldVal !== newVal) {
-            const label = fieldLabels[key] || key;
-            
-            // Formateo especial para asignación (nombres en lugar de IDs)
-            if (key === 'assigned_to') {
-              const oldUser = users.find(u => u.id === oldVal)?.name || 'Sin asignar';
-              const newUser = users.find(u => u.id === newVal)?.name || 'Sin asignar';
-              changes.push(`${label}: [${oldUser}] ➔ [${newUser}]`);
-            } else {
-              changes.push(`${label}: [${oldVal || 'Vacío'}] ➔ [${newVal || 'Vacío'}]`);
-            }
-          }
-        });
-        
+    // Formateo especial para asignación (nombres en lugar de IDs)
+    if (key === 'assigned_to') {
+      const oldUser = users.find(u => u.id === (oldVal as string))?.name || 'Sin asignar';
+      const newUser = users.find(u => u.id === (newVal as string))?.name || 'Sin asignar';
+      changes.push(`${String(label)}: [${oldUser}] ➔ [${newUser}]`);
+    } else {
+      changes.push(`${String(label)}: [${String(oldVal || 'Vacío')}] ➔ [${String(newVal || 'Vacío')}]`);
+    }
+  }
+});
         if (changes.length > 0) {
           await logChange(editingOrder.id, 'MODIFICACION', changes.join(' | '));
         }
@@ -341,14 +335,12 @@ const handleSave = async (e: React.FormEvent) => {
                   </div>
                 ))}
                 
-                {/* Botón Galería */}
                 <label className="menu-item" style={{ padding: '1rem', border: '2px dashed var(--border-color)', cursor: 'pointer', height: '100px', justifyContent: 'center', marginBottom: 0 }}>
                   <span className="icon" style={{ fontSize: '1.25rem' }}>🖼️</span>
                   <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>Galería</span>
                   <input type="file" multiple accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
                 </label>
 
-                {/* Botón Cámara Directa */}
                 <label className="menu-item" style={{ padding: '1rem', border: '2px dashed var(--primary-color)', cursor: 'pointer', height: '100px', justifyContent: 'center', marginBottom: 0, backgroundColor: 'rgba(52, 152, 219, 0.05)' }}>
                   <span className="icon" style={{ fontSize: '1.25rem' }}>📷</span>
                   <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>Cámara</span>
@@ -363,7 +355,6 @@ const handleSave = async (e: React.FormEvent) => {
             </div>
           </form>
 
-          {/* SECCIÓN DE HISTORIAL */}
           <div className="history-section">
             <h4>📜 Historial de Cambios</h4>
             <div className="history-timeline">
