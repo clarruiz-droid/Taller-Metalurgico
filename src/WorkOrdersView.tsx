@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { WorkOrder, User, WorkOrderHistory } from './types';
+import type { WorkOrder, User, WorkOrderHistory, Tool } from './types';
 import { supabase } from './lib/supabase';
 import { WORK_ORDER_STATUS_LABELS } from './types';
 import './WorkOrders.css';
@@ -12,6 +12,8 @@ interface WorkOrdersViewProps {
 const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) => {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [allTools, setAllTools] = useState<Tool[]>([]);
+  const [budgetInfo, setBudgetInfo] = useState<{ materials: any[], tools: string[] } | null>(null);
   const [history, setHistory] = useState<WorkOrderHistory[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
@@ -36,9 +38,10 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [woRes, uRes] = await Promise.all([
+      const [woRes, uRes, tRes] = await Promise.all([
         supabase.from('ordenes_trabajo').select('*, profiles:assigned_to(full_name)').order('created_at', { ascending: false }),
-        supabase.from('profiles').select('id, full_name, role').order('full_name')
+        supabase.from('profiles').select('id, full_name, role').order('full_name'),
+        supabase.from('herramientas').select('*')
       ]);
 
       if (!woRes.error) {
@@ -59,6 +62,8 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
           }));
         setUsers(mappedUsers);
       }
+
+      if (!tRes.error) setAllTools(tRes.data || []);
     } catch (err) {
       console.error('Error cargando datos:', err);
     } finally {
@@ -216,10 +221,26 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
     }
   };
 
+  const fetchBudgetDetails = async (budgetId: number) => {
+    const { data, error } = await supabase
+      .from('presupuestos')
+      .select('materials, tools')
+      .eq('id', budgetId)
+      .single();
+    
+    if (!error && data) {
+      setBudgetInfo(data);
+    } else {
+      setBudgetInfo(null);
+    }
+  };
+
   const openEdit = (wo: WorkOrder) => {
     setEditingOrder(wo);
     setFormData(wo);
     fetchHistory(wo.id);
+    if (wo.budget_id) fetchBudgetDetails(wo.budget_id);
+    else setBudgetInfo(null);
     setShowForm(true);
   };
 
@@ -289,6 +310,41 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
               <label>Descripción del Trabajo</label>
               <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required className="form-input" rows={3} />
             </div>
+
+            {/* LISTADO DE MATERIALES Y HERRAMIENTAS PRESUPUESTADOS */}
+            {budgetInfo && (
+              <div className="form-group status-group-highlight" style={{ backgroundColor: 'rgba(52, 152, 219, 0.03)', borderStyle: 'solid' }}>
+                <label style={{ color: 'var(--primary-color)', fontSize: '0.75rem' }}>🛠️ Planificado en Presupuesto</label>
+                
+                <div style={{ marginTop: '0.75rem' }}>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.5rem', opacity: 0.8 }}>MATERIALES:</p>
+                  <div className="selected-items-list">
+                    {budgetInfo.materials?.map((m, idx) => (
+                      <span key={idx} className="item-chip view-mode">
+                        {m.description} <span className="chip-qty-view">x{m.quantity}</span>
+                      </span>
+                    ))}
+                    {(!budgetInfo.materials || budgetInfo.materials.length === 0) && <p style={{ fontSize: '0.7rem', fontStyle: 'italic' }}>Sin materiales definidos</p>}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '1rem' }}>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 'bold', marginBottom: '0.5rem', opacity: 0.8 }}>HERRAMIENTAS:</p>
+                  <div className="selected-items-list">
+                    {budgetInfo.tools?.map((toolId, idx) => {
+                      const toolName = allTools.find(t => t.id === toolId)?.description || 'Herramienta desconocida';
+                      return (
+                        <span key={idx} className="tool-chip">
+                          {toolName}
+                        </span>
+                      );
+                    })}
+                    {(!budgetInfo.tools || budgetInfo.tools.length === 0) && <p style={{ fontSize: '0.7rem', fontStyle: 'italic' }}>Sin herramientas definidas</p>}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="form-row">
               <div className="form-group">
                 <label>Prioridad</label>
