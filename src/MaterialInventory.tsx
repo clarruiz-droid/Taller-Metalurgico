@@ -85,17 +85,27 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
     try {
       setUploading(true);
       if (!event.target.files || event.target.files.length === 0) return;
-      const file = event.target.files[0];
-      const resizedBlob = await resizeImage(file);
-      const fileName = `mats/${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
 
-      const { error: uploadError } = await supabase.storage.from('materiales').upload(fileName, resizedBlob, { contentType: 'image/webp' });
+      const file = event.target.files[0];
+      console.log('Iniciando procesamiento de imagen:', file.name);
+
+      // REDIMENSIONAR IMAGEN (Crítico para fotos de cámara de alta resolución)
+      const resizedBlob = await resizeImage(file);
+      const fileName = `mat-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('materiales')
+        .upload(fileName, resizedBlob, { contentType: 'image/webp' });
+
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from('materiales').getPublicUrl(fileName);
+
       setFormData(prev => ({ ...prev, image_url: data.publicUrl }));
+      alert('Imagen cargada con éxito en el formulario');
     } catch (error: any) {
-      alert('Error subiendo imagen: ' + error.message);
+      console.error('Error en subida:', error);
+      alert('Error al subir imagen: ' + error.message);
     } finally {
       setUploading(false);
     }

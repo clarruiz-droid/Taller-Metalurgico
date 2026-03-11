@@ -56,14 +56,27 @@ const ToolInventory: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
     try {
       setUploading(true);
       if (!event.target.files || event.target.files.length === 0) return;
+      
       const file = event.target.files[0];
-      const fileName = `tools/${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
-      const { error: uploadError } = await supabase.storage.from('herramientas').upload(fileName, file);
+      console.log('Iniciando procesamiento de imagen:', file.name);
+
+      // REDIMENSIONAR IMAGEN (Asegurar que usamos el blob redimensionado)
+      const resizedBlob = await resizeImage(file);
+      const fileName = `tool-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('herramientas')
+        .upload(fileName, resizedBlob, { contentType: 'image/webp' });
+
       if (uploadError) throw uploadError;
+
       const { data } = supabase.storage.from('herramientas').getPublicUrl(fileName);
+      
       setFormData(prev => ({ ...prev, image_url: data.publicUrl }));
+      alert('Imagen cargada con éxito en el formulario');
     } catch (error: any) {
-      alert('Error subiendo imagen: ' + error.message);
+      console.error('Error en subida:', error);
+      alert('Error al subir imagen: ' + error.message);
     } finally {
       setUploading(false);
     }
