@@ -13,7 +13,7 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
-  const [uploadStatus, setUploadStatus] = useState<'IDLE' | 'PROCESSING' | 'UPLOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
+  const [uploadStatus, setUploadStatus] = useState<'IDLE' | 'UPLOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [errorMessage, setErrorMessage] = useState('');
 
   const canEditRole = currentUser?.role === 'ADMIN' || currentUser?.role === 'GERENTE' || currentUser?.role === 'SUPERVISOR';
@@ -55,86 +55,48 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
     if (!error) setMaterials(data || []);
   };
 
-  const resizeImage = (file: File): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800;
-          let width = img.width;
-          let height = img.height;
-          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-          canvas.width = width; canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blob) => {
-              if (blob) resolve(blob);
-              else reject(new Error('Error en canvas'));
-            }, 'image/jpeg', 0.7);
-          }
-        };
-        img.onerror = () => reject(new Error('Error cargando imagen'));
-      };
-      reader.onerror = () => reject(new Error('Error leyendo archivo'));
-    });
-  };
-
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     try {
-      setUploadStatus('PROCESSING');
+      setUploadStatus('UPLOADING');
       setErrorMessage('');
       
-      let dataToUpload: Blob | File = file;
-      let extension = file.name.split('.').pop() || 'jpg';
+      // Nombre de archivo único y seguro
+      const fileExt = file.name.split('.').pop() || 'jpg';
+      const fileName = `mat-${Date.now()}-${Math.floor(Math.random() * 1000)}.${fileExt}`;
 
-      // Intentar redimensionar para ahorrar datos y evitar fallos de memoria
-      try {
-        const resized = await resizeImage(file);
-        dataToUpload = resized;
-        extension = 'jpg';
-      } catch (e) {
-        console.warn('Redimensionamiento fallido, subiendo original:', e);
-        dataToUpload = file;
-      }
-
-      setUploadStatus('UPLOADING');
-      const fileName = `m-${Date.now()}.${extension}`;
-
+      // SUBIDA DIRECTA (Sin redimensionar para evitar cierres de navegador por RAM)
       const { error: uploadError } = await supabase.storage
         .from('materiales')
-        .upload(fileName, dataToUpload, { 
-          contentType: extension === 'jpg' ? 'image/jpeg' : file.type,
-          cacheControl: '3600'
+        .upload(fileName, file, { 
+          cacheControl: '3600',
+          upsert: false
         });
 
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from('materiales').getPublicUrl(fileName);
       
-      const newUrl = data.publicUrl;
-      setFormData(prev => {
-        const newState = { ...prev, image_url: newUrl };
-        localStorage.setItem('draft_material', JSON.stringify(newState));
-        return newState;
-      });
-      
-      setUploadStatus('SUCCESS');
-      setTimeout(() => setUploadStatus('IDLE'), 3000);
+      if (data?.publicUrl) {
+        setFormData(prev => {
+          const newState = { ...prev, image_url: data.publicUrl };
+          localStorage.setItem('draft_material', JSON.stringify(newState));
+          return newState;
+        });
+        setUploadStatus('SUCCESS');
+      } else {
+        throw new Error('No se pudo generar la URL de la imagen');
+      }
 
     } catch (error: any) {
       console.error('Error subiendo:', error);
       setUploadStatus('ERROR');
-      setErrorMessage(error.message);
+      setErrorMessage(error.message || 'Error desconocido');
     } finally {
       event.target.value = '';
+      setTimeout(() => setUploadStatus(prev => prev === 'SUCCESS' ? 'IDLE' : prev), 5000);
     }
   };
 
@@ -197,9 +159,7 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
                   <img src={formData.image_url} alt="Vista previa" className="form-image-preview" />
                 ) : (
                   <div className="no-image">
-                    {uploadStatus === 'PROCESSING' ? '📸 Procesando...' : 
-                     uploadStatus === 'UPLOADING' ? '☁️ Subiendo...' : 
-                     'Sin imagen seleccionada'}
+                    {uploadStatus === 'UPLOADING' ? '☁️ Subiendo...' : 'Sin imagen seleccionada'}
                   </div>
                 )}
               </div>
@@ -208,16 +168,16 @@ const MaterialInventory: React.FC<{ currentUser: User | null }> = ({ currentUser
                 <input 
                   type="file" accept="image/*" capture="environment" 
                   onChange={handleFileUpload} 
-                  disabled={uploadStatus === 'PROCESSING' || uploadStatus === 'UPLOADING'} 
-                  id="camera-input" style={{ display: 'none' }}
+                  disabled={uploadStatus === 'UPLOADING'} 
+                  id="camera-input-mat" style={{ display: 'none' }}
                 />
-                <label htmlFor="camera-input" className="btn-primary" style={{ backgroundColor: 'var(--secondary-color)', marginBottom: '1rem' }}>
-                  {uploadStatus === 'PROCESSING' || uploadStatus === 'UPLOADING' ? 'Cargando...' : '📷 Tomar Foto / Galería'}
+                <label htmlFor="camera-input-mat" className="btn-primary" style={{ backgroundColor: 'var(--secondary-color)', marginBottom: '1rem' }}>
+                  {uploadStatus === 'UPLOADING' ? 'Cargando...' : '📷 Tomar Foto / Galería'}
                 </label>
               </div>
 
-              {uploadStatus === 'SUCCESS' && <p style={{ color: '#10b981', fontSize: '0.8rem', textAlign: 'center' }}>✅ Imagen cargada correctamente</p>}
-              {uploadStatus === 'ERROR' && <p style={{ color: '#ef4444', fontSize: '0.8rem', textAlign: 'center' }}>❌ Error: {errorMessage}</p>}
+              {uploadStatus === 'SUCCESS' && <p style={{ color: '#10b981', fontSize: '0.9rem', textAlign: 'center', fontWeight: 'bold' }}>✅ Imagen cargada</p>}
+              {uploadStatus === 'ERROR' && <p style={{ color: '#ef4444', fontSize: '0.9rem', textAlign: 'center', fontWeight: 'bold' }}>❌ Error: {errorMessage}</p>}
             </div>
 
             <div className="form-group">
