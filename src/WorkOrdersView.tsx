@@ -308,9 +308,19 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
                     <img src={url} alt={`Trabajo ${idx}`} />
                   </div>
                 ))}
+                
+                {/* Botón Galería */}
                 <label className="menu-item" style={{ padding: '1rem', border: '2px dashed var(--border-color)', cursor: 'pointer', height: '100px', justifyContent: 'center', marginBottom: 0 }}>
-                  <span className="icon" style={{ fontSize: '1.5rem' }}>➕</span>
+                  <span className="icon" style={{ fontSize: '1.25rem' }}>🖼️</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>Galería</span>
                   <input type="file" multiple accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                </label>
+
+                {/* Botón Cámara Directa */}
+                <label className="menu-item" style={{ padding: '1rem', border: '2px dashed var(--primary-color)', cursor: 'pointer', height: '100px', justifyContent: 'center', marginBottom: 0, backgroundColor: 'rgba(52, 152, 219, 0.05)' }}>
+                  <span className="icon" style={{ fontSize: '1.25rem' }}>📷</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 'bold' }}>Cámara</span>
+                  <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} style={{ display: 'none' }} />
                 </label>
               </div>
             </div>
