@@ -19,6 +19,7 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
   const [allTools, setAllTools] = useState<Tool[]>([]);
   const [budgetInfo, setBudgetInfo] = useState<{ materials: any[], tools: string[] } | null>(null);
   const [history, setHistory] = useState<WorkOrderHistory[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
@@ -449,21 +450,40 @@ const WorkOrdersView: React.FC<WorkOrdersViewProps> = ({ onBack, currentUser }) 
             </div>
           </form>
 
-          <div className="history-section">
-            <h4>📜 Historial de Cambios</h4>
-            <div className="history-timeline">
-              {history.map(log => (
-                <div key={log.id} className="history-item">
-                  <div className="history-dot"></div>
-                  <div className="history-content">
-                    <div className="history-header"><strong>{log.user_name}</strong><span className="history-time">{new Date(log.created_at).toLocaleString()}</span></div>
-                    <div className="history-action-badge">{log.action}</div>
-                    <p className="history-details">{log.details}</p>
-                  </div>
+          {/* SECCIÓN DE HISTORIAL - RESTRINGIDA PARA OPERARIOS Y COLAPSABLE */}
+          {currentUser && currentUser.role !== 'OPERARIO' && (
+            <div className="history-section">
+              <header 
+                className="history-toggle-header" 
+                onClick={() => setShowHistory(!showHistory)}
+                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <h4>📜 Historial de Cambios</h4>
+                <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>
+                  {showHistory ? '▲ Ocultar' : '▼ Ver Historial'}
+                </span>
+              </header>
+              
+              {showHistory && (
+                <div className="history-timeline" style={{ marginTop: '1.5rem' }}>
+                  {history.length === 0 ? (
+                    <p className="empty-msg">No hay registros de cambios aún.</p>
+                  ) : (
+                    history.map(log => (
+                      <div key={log.id} className="history-item">
+                        <div className="history-dot"></div>
+                        <div className="history-content">
+                          <div className="history-header"><strong>{log.user_name}</strong><span className="history-time">{new Date(log.created_at).toLocaleString()}</span></div>
+                          <div className="history-action-badge">{log.action}</div>
+                          <p className="history-details">{log.details}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
-              ))}
+              )}
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>
